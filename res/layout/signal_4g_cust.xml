@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:layout_marginTop="2dp"
+    android:background="#FFFFFF"
+    android:stretchColumns="*" >
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MCC: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/mcc_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MNC: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/mnc_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CI: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/ci_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TAC: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/tac_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PCI: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/pci_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CQI: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/cqi_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RSRP: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rsrp_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RSRQ: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rsrq_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RSSI: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rssi_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RSSNR: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rssnr_4g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+</TableLayout>

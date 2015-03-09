@@ -1,0 +1,167 @@
+package com.wellcell.SubFrag.Diagnosis;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+
+import android.content.Context;
+import android.content.res.Resources.NotFoundException;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import com.wellcell.ctdetection.R;
+
+public class TracerouteFragment extends Fragment implements OnClickListener, OnResultListener
+{
+	TextView textResult;
+	EditText hop_count, timeout;
+	AutoCompleteTextView address;
+	ScrollView mScroll;
+	Button btn_test;
+	private ProgressBar mProgress;
+	private static final String[] addresses = new String[] { "www.baidu.com" };
+	private static boolean installed = false;
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+	{
+		View view = inflater.inflate(R.layout.fragment_traceroute, null);
+		// initial
+		btn_test = (Button) view.findViewById(R.id.trace_test);
+		btn_test.setOnClickListener(this);
+		btn_test.setEnabled(false);
+		textResult = (TextView) view.findViewById(R.id.result);
+		address = (AutoCompleteTextView) view.findViewById(R.id.address);
+		address.setAdapter(new ArrayAdapter<String>(getActivity(), android.R.layout.simple_dropdown_item_1line, addresses));
+		hop_count = (EditText) view.findViewById(R.id.hop);
+		timeout = (EditText) view.findViewById(R.id.delay);
+		mScroll = (ScrollView) view.findViewById(R.id.scroll_result);
+		mProgress = (ProgressBar) view.findViewById(R.id.progressBar1);
+		return view;
+	}
+
+	@Override
+	public void onResume()
+	{
+		super.onResume();
+		if (!installed)
+		{
+			new AsyncTask<Void, Void, Boolean>()
+			{
+				@Override
+				protected Boolean doInBackground(Void... arg0)
+				{
+					// TODO Auto-generated method stub
+					try
+					{
+						File tracerouteFile = new File(getActivity().getResources().getString(R.string.traceroute_bin));
+						if (tracerouteFile.exists())
+							return true;
+						/**拷贝Assets的bin文件到软件安装后的私有文件夹内*/
+						InputStream localInputStream = getActivity().getAssets().open("traceroute");
+						int size = localInputStream.available();
+						byte[] bytes = new byte[size];
+						localInputStream.read(bytes);
+						FileOutputStream localFileOutputStream = new FileOutputStream(tracerouteFile);
+						localFileOutputStream.write(bytes, 0, size);
+						localFileOutputStream.close();
+						localInputStream.close();
+						/**给权限*/
+						Process process = Runtime.getRuntime().exec("/system/bin/chmod 744 " + getActivity().getResources().getString(R.string.traceroute_bin));
+						process.waitFor();
+						process.destroy();
+						return true;
+					}
+					catch (IOException e)
+					{
+						return false;
+					}
+					catch (InterruptedException e)
+					{
+						return false;
+					}
+				}
+
+				protected void onPostExecute(Boolean result)
+				{
+					btn_test.setEnabled(result);
+					installed = result;
+				}
+			}.execute();
+		}
+	}
+
+	@Override
+	public void onReceiveResult(String result)
+	{
+		// TODO Auto-generated method stub
+		mProgress.setVisibility(View.GONE);
+		textResult.append(result + "\n");
+		mScroll.fullScroll(android.view.View.FOCUS_DOWN);
+		// enable edit
+		address.setEnabled(true);
+		hop_count.setEnabled(true);
+		timeout.setEnabled(true);
+	}
+
+	@Override
+	public void onClick(View arg0)
+	{
+		// TODO Auto-generated method stub
+		if (CommandTask.running())
+			return;
+		mProgress.setVisibility(View.VISIBLE);
+		textResult.setText("");
+		try
+		{
+			new CommandTask().setOnResultListener(this).execute(
+			// command
+					getActivity().getResources().getString(R.string.traceroute_bin) + " "
+					// hop count
+							+ "-m " + (hop_count.getText().toString().equalsIgnoreCase("") ? "30" : hop_count.getText().toString())
+							// delay
+							+ " -w " + (timeout.getText().toString().equalsIgnoreCase("") ? "2" : timeout.getText().toString())
+							// address
+							+ " " + InetAddress.getByName((address.getText().toString().equalsIgnoreCase("") ? addresses[0] : address.getText().toString())).getHostAddress());
+		}
+		catch (NotFoundException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		catch (UnknownHostException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		InputMethodManager mInput = (InputMethodManager) getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
+		mInput.hideSoftInputFromWindow(getActivity().getCurrentFocus().getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+		// disable edit
+		address.setEnabled(false);
+		hop_count.setEnabled(false);
+		timeout.setEnabled(false);
+	}
+
+	@Override
+	public void onHiddenChanged(boolean hidden)
+	{
+		super.onHiddenChanged(hidden);
+		CommandTask.stop();
+	}
+}

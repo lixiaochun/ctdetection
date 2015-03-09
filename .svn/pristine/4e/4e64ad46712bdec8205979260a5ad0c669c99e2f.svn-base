@@ -1,0 +1,600 @@
+package com.wellcell.inet.Task.Web;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import org.json.JSONArray;
+
+import android.content.Context;
+import android.util.Log;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Common.CGlobal.TestState;
+import com.wellcell.inet.DataProvider.PhoneDataProvider;
+import com.wellcell.inet.Task.AbsTask;
+import com.wellcell.inet.Task.TaskRankPar;
+import com.wellcell.inet.Task.TaskPar.WebPar;
+
+public class WebTestTaskEx extends AbsTask
+{
+	public final static String TAG = "WebTestTaskEx";
+	
+	public WebPar m_webPar; //配置信息
+	private final String m_strPath = "/mnt/sdcard/webTest.html"; //下载网页路径
+	
+	public List<WebRet> m_listWebRet;	//过程数据
+
+	//连接时延
+	public int m_nLinkDelayMax = Integer.MIN_VALUE;
+	public int m_nLinkDelayMin = Integer.MAX_VALUE;
+	public int m_nLinkDelayAvg = Integer.MAX_VALUE;
+	public int m_nLinkSucCount = 0;				//连接成功时延
+	
+	//下载时延
+	public int m_nDownLoadDelayMax = Integer.MIN_VALUE;	// 只计算成功的,毫秒
+	public int m_nDownLoadDelayMin = Integer.MAX_VALUE;	// 只计算成功的,毫秒
+	public int m_nDownLoadDelayAvg = Integer.MAX_VALUE;	// 只计算成功的,毫秒
+
+	//打开时延
+	public int m_nOpenDelayMax = Integer.MIN_VALUE;	// 只计算成功的,毫秒
+	public int m_nOpenDelayMin = Integer.MAX_VALUE;	// 只计算成功的,毫秒
+	public int m_nOpenDelayAvg = Integer.MAX_VALUE;	// 只计算成功的,毫秒
+	
+	public int m_nSucCount = 0;			//成功次数
+	public int m_nTestCount = 0;		//实际测试总次数
+
+	public long m_lSizeSum = 0;		// 总流量全部(byte)
+	public long m_lSizeAvg = 0;		// 平均流量只计成功
+	public double m_dSpeedAvg = 0;	// 平均速率只计成功(流量/打开时延)
+	public double m_dDownLoadSpeedAvg = 0;	//平均下载速率(内容长度/下载时延)(byte/s)
+	//---------------辅助字段-------------------------------
+	private long m_lStartSize = 0;	//开始流量
+	public int m_nLinkDelaySum = 0;	//连接时延累加值
+	public int m_nOpenDelaySum = 0;	//打开时延总和
+
+	private HttpSocket m_httpSocket;
+	private WebView m_webView;
+	private TaskWebviewClient m_webClient;
+	
+	private int m_nUid;
+	private final String userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/534.24 (KHTML, like Gecko) Chrome/11.0.696.34 Safari/534.24";
+
+	private Timer m_timer;	//超时定时器
+	private boolean m_bFinish = false;	//单次是否完成测试(停止定时器标签)
+	
+	public WebTestTaskEx(Context context, WebPar par, boolean bAuto,String strTaskID,boolean bAnteTest,boolean bBtsInfo)
+	{
+		super(TaskType.WEBSITE, context, bAuto,strTaskID,bAnteTest,bBtsInfo);
+		
+		m_webPar = par;
+		m_webView = new WebView(m_Context);
+		m_webClient = new TaskWebviewClient();
+		m_listWebRet = new ArrayList<WebRet>();	//过程数据集合
+		
+		m_httpSocket = new HttpSocket(m_webPar.m_strUrl, 80,m_strPath);
+		m_nUid = CGlobal.getUID(m_Context);	//获取User ID
+	}
+	
+	@Override
+	protected void runningTask()
+	{
+		WebViewSetting(); //设置
+		
+		// 开启测试
+		WebRet webRet;
+		for (int i = 0; i < m_webPar.m_nCount && m_curState == TestState.eTesting; i++)
+		{
+			Init();	//初始化
+			sendMessage(String.format("第%1s次测试开始，正在打开%2s", i + 1, m_webPar.m_strUrl));
+
+			webRet = WebTest();	//开始测试
+			m_listWebRet.add(webRet);	//保存结果
+
+			sendMessage(String.format("第%1s次测试完成，%2s\n网页打开延时(KQI)：%3s秒\n首包延时(KQI)：%4s毫秒\n下载延时:%5s毫秒\n流量：%6s\n", 
+					i + 1, webRet.m_bSuc ? "成功" : "失败",CGlobal.getSecondString(webRet.getOpenDelay()), webRet.getLinkDelay(), 
+					webRet.getDownLoadDelay(), CGlobal.getSizeString(webRet.getWebSize())));
+
+			if(i != m_webPar.m_nCount - 1)
+				CGlobal.Sleep(2000);//间隔时延
+		}
+		//-----------------------------------------------------------------------------
+		statistRet();	//完成后统计
+		//------------------------------------------------------------------------------
+		m_webView.freeMemory();// 释放WebView
+		m_webView.destroy();
+		m_httpSocket.close();
+	}
+	
+	//WebView设置
+	private void WebViewSetting()
+	{
+		m_webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+		m_webView.getSettings().setUserAgentString(userAgent);
+	}
+	
+	//单次网页测试
+	private WebRet WebTest()
+	{
+		m_lStartSize = CGlobal.getCurTrafficRx(m_nUid);	//开始流量大小
+		
+		//连接服务器
+		if(!m_httpSocket.connetServer())		
+			return m_httpSocket.getWebRet();
+		
+		//发送请求
+		if(!m_httpSocket.sendRequest())		
+			return m_httpSocket.getWebRet(); 
+		
+		//接收消息头
+		if(m_httpSocket.getResponseHead() == null)
+			return m_httpSocket.getWebRet();	
+		
+		m_httpSocket.getHeadPropirty();	//获取消息头属性
+		
+		m_httpSocket.downLoadContent();	//下载消息体
+		m_httpSocket.close();	//关闭
+		//------------------------------------------------
+		WebRet webRet = m_httpSocket.getWebRet();
+		
+		webRet = openWebSite("file:" + m_strPath, webRet); //打开本地网页
+		webRet.m_nSumSize = (int)(CGlobal.getCurTrafficRx(m_nUid) - m_lStartSize);	//单次总流量
+		
+		webRet.OnComplete();	//完成处理
+		
+		//关闭定时器
+		if (!m_bFinish)
+		{
+			m_timer.cancel();
+			m_timer.purge();
+		}
+		
+		return webRet;
+	}
+	
+	//WebView初始化
+	private void Init()
+	{
+		m_timer = new Timer();
+		m_bFinish = false;
+		
+		//m_httpSocket.close();
+		
+		m_webView.stopLoading();
+		CGlobal.Sleep(500);
+
+		m_webView.clearCache(true);	//清楚缓存
+		m_webView.clearHistory();	//清楚历史记录
+		CGlobal.Sleep(500);
+
+		m_webView.setWebViewClient(m_webClient);
+		m_webView.setWebChromeClient(new WebChromeClient());
+	
+		setTimeOutTimer();	//设置定时器
+	}
+	
+	//设置定时器
+	private void setTimeOutTimer()
+	{
+		TimerTask tt = new TimerTask() //超时控制
+		{
+			@Override
+			public void run()
+			{
+				if (!m_bFinish)
+				{
+					//bSuc = false;
+					Log.d(TAG, "timeout");
+					m_timer.cancel();
+					m_timer.purge();
+					m_bFinish = true;
+					
+					m_httpSocket.stopTest();
+					//m_httpSocket.close();	//关闭
+					
+					m_webClient.bFinish = true;
+					m_webClient.bSuc = false;
+					m_webView.stopLoading();
+				}
+			}
+		};
+		
+		try
+		{
+			m_timer.schedule(tt, m_webPar.m_nTimeout, 1);
+		}
+		catch (Exception ex)
+		{
+			ex.printStackTrace();
+		}
+	}
+	
+	/**
+	 * 功能: 打开网页
+	 * 参数: url: 地址
+	 * 		timeout: 
+	 * 返回值:
+	 * 说明:
+	 */
+	private WebRet openWebSite(final String url, WebRet webRet)
+	{
+		//已经超时
+		if(m_bFinish)
+		{
+			webRet.m_bSuc = false;
+			webRet.m_nLoadDelay = 0;	//加载时延
+			return webRet;
+		}
+		
+		/*if(m_webPar.m_type == BroswerType.Mobile)
+		{
+			webRet.m_bSuc = true;
+			webRet.m_nRet = 1;
+			webRet.m_nLoadDelay = 0;	//加载时延
+			return webRet;
+		}*/
+		
+		new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				m_webClient.onStart();
+				m_webView.loadUrl(url);	//加载URL
+			}
+		}.run();
+
+		//等待完成
+		while (!m_webClient.isFinish())
+		{
+			CGlobal.Sleep(m_nInterval);
+		}
+		//-----------------------------------------------------------------
+		// 记录信息
+		webRet.m_bSuc = m_webClient.isLoadSuc();
+		if(webRet.m_bSuc)
+			webRet.m_nRet = 1;
+		webRet.m_nLoadDelay = m_webClient.getLoadTime();	//加载时延
+		
+		return webRet;
+	}
+
+	//统计结果
+	private void statistRet()
+	{
+	
+		int nDownLoadDelaySum = 0;	//下载时延累加值
+		int nDownLoadSizeSum = 0;	//内容长度累加值
+		int nWebSizeSum = 0;	//网页大小(使用流量来计算)累加值
+		
+		int nTemp;
+		WebRet webRet;
+		for (int i = 0; i < m_listWebRet.size(); i++)
+		{
+			webRet = m_listWebRet.get(i);
+			
+			//连接时延
+			nTemp = webRet.m_nLinkDelay;
+			if (nTemp != 0) //链接成功
+			{
+				m_nLinkDelaySum += nTemp;
+				if (m_nLinkDelayMax < nTemp)
+					m_nLinkDelayMax = nTemp;
+
+				if (m_nLinkDelayMin > nTemp)
+					m_nLinkDelayMin = nTemp;
+
+				//连接成功次数
+				if (webRet.m_nRet != HttpSocket.Web_LinkFail && webRet.m_nRet != HttpSocket.Web_LinkTO)
+					m_nLinkSucCount++;
+			}
+			
+			if(webRet.m_bSuc)
+			{
+				m_nSucCount++;
+				
+				//----------------------------------------------------------------------------------
+				//下载时延
+				nTemp = webRet.getDownLoadDelay();
+				nDownLoadDelaySum += nTemp;
+				if(m_nDownLoadDelayMax < nTemp)
+					m_nDownLoadDelayMax = nTemp;
+				
+				if(m_nDownLoadDelayMin > nTemp)
+					m_nDownLoadDelayMin = nTemp;
+				
+				//下载时延/内容长度
+				nDownLoadSizeSum += webRet.m_nWebSize;
+				//-----------------------------------------------------------------------------------
+				//打开时延
+				nTemp = webRet.getOpenDelay();
+				m_nOpenDelaySum += nTemp;
+				if(m_nOpenDelayMax < nTemp)
+					m_nOpenDelayMax = nTemp;
+				
+				if(m_nOpenDelayMin > nTemp)
+					m_nOpenDelayMin = nTemp;
+				
+				//网页大小
+				nWebSizeSum += webRet.m_nSumSize;
+				
+			}
+			m_lSizeSum += webRet.m_nSumSize;	//总流量
+		}
+		m_nTestCount = m_listWebRet.size();	//总测试次数
+		
+		if(m_nLinkSucCount > 0)
+			m_nLinkDelayAvg = m_nLinkDelaySum / m_nLinkSucCount; //平均连接时延
+		else
+			m_nLinkDelayAvg = -1;
+		
+		// 记录平均值
+		if (m_nSucCount > 0)
+		{
+			m_nDownLoadDelayAvg = nDownLoadDelaySum / m_nSucCount;	//平均下载时延
+			m_nOpenDelayAvg = m_nOpenDelaySum / m_nSucCount; //平均打开时延
+			m_lSizeAvg = nWebSizeSum / m_nSucCount;		//平均网页大小
+			m_dDownLoadSpeedAvg = nDownLoadSizeSum * 1000.0 / nDownLoadDelaySum;
+			m_dSpeedAvg = m_lSizeAvg * 1000.0 / m_nOpenDelayAvg;	//平均速率
+		}
+		else
+		{
+			m_nDownLoadDelayAvg = -1;
+			m_nOpenDelayAvg = -1;
+			m_lSizeAvg = -1;
+			m_dDownLoadSpeedAvg = -1;
+			m_dSpeedAvg = -1;
+		}
+		
+		// 最大值、最小值无效化处理
+		m_nLinkDelayMax = CGlobal.getInvalidVal(m_nLinkDelayMax);
+		m_nLinkDelayMin = CGlobal.getInvalidVal(m_nLinkDelayMin);
+		m_nOpenDelayMax = CGlobal.getInvalidVal(m_nOpenDelayMax);
+		m_nOpenDelayMin = CGlobal.getInvalidVal(m_nOpenDelayMin);
+	}
+	
+	//----------------------------------------------------------
+	@Override
+	public void recordStop()
+	{
+		super.recordStop();
+
+		sendMessage(String.format("任务结果：\n最长网页打开延时: %1s秒\n最短网页打开延时: %2s秒\n平均网页打开延时: %3s秒\n成功打开次数:%4s" 
+		+ "\n总尝试次数:%5s\n总流量：%6s\n平均每次流量（只计成功）：%7s\n下载速率: %8s\n平均速率：%9s", CGlobal.getSecondString(m_nOpenDelayMax), 
+		CGlobal.getSecondString(m_nOpenDelayMin),CGlobal.getSecondString(m_nOpenDelayAvg),
+		m_nSucCount, m_nTestCount, CGlobal.getSizeString(m_lSizeSum), CGlobal.getSizeString(m_lSizeAvg),
+		CGlobal.getSpeedString(m_dDownLoadSpeedAvg),CGlobal.getSpeedString(m_dSpeedAvg)));
+	};
+	
+	@Override
+	protected JSONArray getTaskDataJson()
+	{
+		JSONArray obj = new JSONArray();
+		
+		obj.put(m_strTID);
+		obj.put(m_webPar.m_strUrl);
+		obj.put(m_webPar.m_nTimeout + "");
+		obj.put( m_webPar.m_nCount + "");
+		obj.put("0");	//浏览类型
+		//用时
+		obj.put(m_nOpenDelayMax + "");
+		obj.put(m_nOpenDelayMin + "");
+		obj.put(m_nOpenDelayAvg + "");
+		obj.put(m_nLinkSucCount + "");	//连接成功次数
+		
+		obj.put(m_nSucCount + "");
+		obj.put(m_nTestCount + "");
+		// 增加流量字段
+		obj.put(m_lSizeSum + "");	//总流量
+		obj.put(m_lSizeAvg + "");	//平均流量
+		obj.put(CGlobal.floatFormatString(m_dSpeedAvg,2));	//平均速率
+		
+		// 增加延迟字段
+		obj.put(m_nLinkDelayMax + "");
+		obj.put(m_nLinkDelayMin + "");
+		obj.put(m_nLinkDelayAvg + "");
+		obj.put(m_webPar.m_nProgAlarm + "");	//时延门限
+		
+		return obj;
+	}
+	
+	//获取过程数据json
+	@Override
+	protected JSONArray getTaskRecJson(JSONArray objRec)
+	{
+		if(objRec == null)
+			objRec = new JSONArray();
+		
+		for (int i = 0; i < m_listWebRet.size(); i++)
+		{
+			objRec.put(m_listWebRet.get(i).getJson(m_strTID));
+		}
+		return objRec;
+	}
+
+	@Override
+	protected String getTaskDetailReport()
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("目标网址：%1s\n", m_webPar.m_strUrl));
+		sb.append(String.format("超时时间：%1s\n", m_webPar.m_nTimeout));
+		sb.append(String.format("重复次数：%1s\n", m_webPar.m_nCount));
+		//sb.append(String.format("浏览类型：%1s\n", m_webPar.m_type));
+
+		sb.append(String.format("成功次数/总次数：%1s/%2s\n", m_nSucCount, m_nTestCount));
+		//首包延时
+		sb.append(String.format("最大/平均/最小首包延时(KQI)：\n%1s/%2s/%3s毫秒\n", 
+				CGlobal.getMsString(m_nLinkDelayMax), 
+				CGlobal.getMsString(m_nLinkDelayAvg), 
+				CGlobal.getMsString(m_nLinkDelayMin)));
+		//下载延时
+		sb.append(String.format("最大/平均/最小下载延时：\n%1s/%2s/%3s秒\n", 
+				CGlobal.getSecondString(m_nDownLoadDelayMax), 
+				CGlobal.getSecondString(m_nDownLoadDelayAvg), 
+				CGlobal.getSecondString(m_nDownLoadDelayMin)));
+		//网页打开延时
+		sb.append(String.format("最大/平均/最小网页打开延时(KQI)：\n%1s/%2s/%3s秒\n", 
+				CGlobal.getSecondString(m_nOpenDelayMax), 
+				CGlobal.getSecondString(m_nOpenDelayAvg), 
+				CGlobal.getSecondString(m_nOpenDelayMin)));
+
+		sb.append(String.format("总流量：%1s\n", CGlobal.getSizeString(m_lSizeSum)));
+		sb.append(String.format("平均流量（只计算成功的）：%1s\n", CGlobal.getSizeString(m_lSizeAvg)));
+		sb.append(String.format("下载速率：%1s\n", CGlobal.getSpeedString(m_dDownLoadSpeedAvg)));
+		sb.append(String.format("平均速率：%1s\n", CGlobal.getSpeedString(m_dSpeedAvg)));
+
+		//sb.append(String.format("时延标准：%1s%%\n", m_webPar.m_nProgAlarm));
+
+		return sb.toString();
+	}
+
+	@Override
+	protected String getTaskScoreReport()
+	{
+		if(m_taskRankPar == null)
+			m_taskRankPar = TaskRankPar.getInsant(m_Context);
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("评价：%1s（%2s）\n", m_taskRankPar.getTaskRankName(m_nTaskVal), m_nTaskVal));
+		sb.append(String.format("平均速率得分：%1s\n", getSpeedValString()));
+		sb.append(String.format("平均时延得分：%1s\n", getDelayValString()));
+		sb.append(String.format("成功率得分：%1s\n", getSucRateValString()));
+		return sb.toString();
+	} 
+
+	@Override
+	public String getSimpReport()
+	{
+		StringBuilder sb = new StringBuilder();
+
+		sb.append(String.format("成功次数/总次数：%1s/%2s\n", m_nSucCount, m_nTestCount));
+		//首包延时
+		sb.append(String.format("最大/平均/最小首包延时(KQI)：\n%1s/%2s/%3s毫秒\n", 
+				CGlobal.getMsString(m_nLinkDelayMax), 
+				CGlobal.getMsString(m_nLinkDelayAvg),
+				CGlobal.getMsString(m_nLinkDelayMin)));
+		//下载延时
+		sb.append(String.format("最大/平均/最小下载延时：\n%1s/%2s/%3s秒\n", 
+				CGlobal.getSecondString(m_nDownLoadDelayMax), 
+				CGlobal.getSecondString(m_nDownLoadDelayAvg),
+				CGlobal.getSecondString(m_nDownLoadDelayMin)));
+		//打开延时
+		sb.append(String.format("最大/平均/最小网页打开延时(KQI)：\n%1s/%2s/%3s秒\n", 
+				CGlobal.getSecondString(m_nOpenDelayMax), 
+				CGlobal.getSecondString(m_nOpenDelayAvg), 
+				CGlobal.getSecondString(m_nOpenDelayMin)));
+
+		sb.append(String.format("总流量：%1s\n", CGlobal.getSizeString(m_lSizeSum)));
+		sb.append(String.format("平均流量（只计算成功的）：%1s\n", CGlobal.getSizeString(m_lSizeAvg)));
+		sb.append(String.format("下载速率：%1s\n", CGlobal.getSpeedString(m_dDownLoadSpeedAvg)));
+		sb.append(String.format("平均速率：%1s\n", CGlobal.getSpeedString(m_dSpeedAvg)));
+
+		return sb.toString();
+	}
+
+	@Override
+	protected double getSpeedAvg()
+	{
+		if(m_dSpeedAvg < 0)
+			return -1;
+		
+		return m_dSpeedAvg * 8.0 / 1000;
+	}
+
+	@Override
+	protected double getDelayAvg()
+	{
+		return m_nLinkDelayAvg;
+	}
+
+	@Override
+	protected double getSucRate()
+	{
+		if(m_nTestCount > 0)
+			return m_nSucCount * 1.0 / m_nTestCount * 100.0;
+		
+		return 0;
+	}
+	
+	//=========================================================
+	class TaskWebviewClient extends WebViewClient
+	{
+		private long lStartTime = 0;	//开始时间
+		private long lEndTime = 0;		//结束时间
+		//private int nTimeout;
+		private boolean bSuc = false;
+		private boolean bFinish = false;
+
+		public void onStart()	//开始打开网页
+		{
+			Log.d(TAG, "onStart");
+			lStartTime = System.currentTimeMillis();	//开始时间
+			lEndTime = 0;
+			bFinish = false;
+		}
+		
+		//获取加载网页时延
+		public int getLoadTime()
+		{
+			if(lEndTime == 0 || lStartTime == 0)
+				return 0;
+			
+			return (int)(lEndTime - lStartTime);
+		}
+
+		public boolean isLoadSuc()
+		{
+			return bSuc;
+		}
+
+		public boolean isFinish()
+		{
+			return bFinish;
+		}
+
+		@Override
+		public void onPageFinished(WebView view, String url)	//加载完毕
+		{
+			if (!bFinish)
+			{
+				Log.d(TAG, "onPageFinished");
+				lEndTime = System.currentTimeMillis();	//结束时间
+				
+				super.onPageFinished(view, url);
+				bSuc = true;
+				m_timer.cancel();
+				m_timer.purge();
+				bFinish = true;
+			}
+		}
+
+		@Override
+		public boolean shouldOverrideUrlLoading(WebView view, String url)
+		{
+			view.loadUrl(url);
+			return true;
+		}
+
+		@Override
+		public void onReceivedError(WebView view, int errorCode, String description, String failingUrl)
+		{
+			if (!bFinish)
+			{
+				Log.d(TAG, "onReceivedError");
+				lEndTime = System.currentTimeMillis();	//结束时间
+				
+				bSuc = false;
+				m_timer.cancel();
+				m_timer.purge();
+				bFinish = true;
+				m_webView.stopLoading();
+			}
+			super.onReceivedError(view, errorCode, description, failingUrl);
+		}
+	}
+}

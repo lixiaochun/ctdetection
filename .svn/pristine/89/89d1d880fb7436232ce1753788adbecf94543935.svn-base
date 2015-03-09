@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg" >
+
+    <include
+        android:id="@+id/custhead"
+        layout="@layout/custtaskhead" />
+
+    <com.wellcell.inet.view.SpeedPanel
+        android:id="@+id/speedpanel"
+        android:layout_width="match_parent"
+        android:layout_height="170dip"
+        android:layout_below="@id/custhead" />
+
+    <include
+        android:id="@+id/start_layout"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="2dp"
+        layout="@layout/signalteststart" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/start_layout"
+        android:layout_below="@id/speedpanel" >
+
+        <include layout="@layout/custtasklist" />
+    </LinearLayout>
+
+</RelativeLayout>

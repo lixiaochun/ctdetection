@@ -1,0 +1,498 @@
+package com.wellcell.inet.Task.Ftp;
+
+import it.sauronsoftware.ftp4j.FTPClient;
+import it.sauronsoftware.ftp4j.FTPCommunicationListener;
+import it.sauronsoftware.ftp4j.FTPDataTransferListener;
+import it.sauronsoftware.ftp4j.FTPIllegalReplyException;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import android.util.Log;
+
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Task.TaskPar.FtpPar;
+
+public class FtpHelper implements FTPCommunicationListener
+{
+	private FtpPar m_ftpPar;		//配置参数
+	public String m_strTmpFile = "";	//本地临时文件
+	
+	//FTP信息接口
+	public interface FtpMsgCallback
+	{
+		public void onReceived(String msg);
+	}
+	private FtpMsgCallback m_cbFtpMsg;
+
+	private FTPClient m_clientParent = new FTPClient();
+	private ArrayList<ftpTransListener> m_listListenTrans = new ArrayList<FtpHelper.ftpTransListener>(); //传输监听组
+	private ArrayList<DownThread> m_listDownThread = new ArrayList<DownThread>();	//多线程下载
+
+	public Date m_dateStart;	//开始时间
+	public Date m_dateEnd;		//结束时间
+	public boolean m_bSucced = false;
+	public boolean m_bFinished = false;
+
+	public long m_lFleSize = 0;
+	
+	private long m_lLastDlSize = 0;
+	private int m_nRecInterval = 1000;
+	private long m_lEclipTime = 3000;	//无效时间
+	
+	public double m_dSpeedMax = Double.MIN_VALUE;	//最大速率
+	public double m_dSpeedMin = Double.MAX_VALUE;	//最小速率
+	
+	//平均速率
+	private double m_dSpeedSum = 0;		//速率总和
+	public int m_nSpeedCount = 0;		//速率记录数
+	public double m_dSpeedAvg;
+
+	private boolean m_bStartTime = false;	//是否开始定时器
+	private Timer m_timer = new Timer();
+	private TimerTask m_endTransfer = new TimerTask()
+	{
+		@Override
+		public void run()
+		{
+			stopDown(); //停止测试
+			m_timer.cancel();
+			m_timer.purge();
+		}
+	};
+
+	//记录速率
+	private TimerTask m_recSpeed = new TimerTask()
+	{
+		@Override
+		public void run()
+		{
+			if(!IsGetData())
+				return;
+			
+			long lDownSize = getDownSizeSum();
+			long size = lDownSize - m_lLastDlSize;
+			m_lLastDlSize = lDownSize;
+			double dSpeed = size / m_nRecInterval * 1000;
+			if(m_dSpeedMax < dSpeed)	//最大速率
+				m_dSpeedMax = dSpeed;
+			
+			if(m_dSpeedMin > dSpeed)	//最小速率
+				m_dSpeedMin = dSpeed;
+			
+			m_dSpeedSum += dSpeed;
+			m_nSpeedCount++;
+			
+			m_cbFtpMsg.onReceived(String.format("当前大小：%1s，当前速率：%2s",
+					CGlobal.getSizeString(lDownSize),CGlobal.getSpeedString(dSpeed)));
+		}
+	};
+	
+	public FtpHelper(FtpPar par,String strTempFile ,FtpMsgCallback callback)
+	{
+		m_ftpPar = par;
+		m_strTmpFile = strTempFile;
+		m_cbFtpMsg = callback;
+		
+		m_clientParent.addCommunicationListener(this);
+	}
+	
+	//终止下载并删除已下载文件
+	private void stopDown()
+	{
+		for (int i = 0; i < m_listDownThread.size(); i++)
+		{
+			final int index = i;
+			new Thread(new Runnable()
+			{
+				@Override
+				public void run()
+				{
+					try
+					{
+						m_listDownThread.get(index).m_clientDown.abortCurrentDataTransfer(true);
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+					}
+					catch (FTPIllegalReplyException e)
+					{
+						e.printStackTrace();
+					}
+				}
+			}).start();
+
+		}
+
+		//删除已现在的文件
+		File file = null;
+		for (int i = 0; i < m_ftpPar.m_nThreadNum; i++)
+		{
+			file = new File(m_strTmpFile + "_" + i);
+			file.delete();
+		}
+		m_bFinished = true;
+	}
+
+	 // 获取可用的客户端
+	private void Login(FTPClient ftpClient)
+	{
+		int nCount = 5;
+		for (int i = 0; i < nCount; i++)
+		{
+			if (ftpClient.isConnected())
+				break;
+
+			try
+			{
+				m_cbFtpMsg.onReceived(String.format("开始连接%1s", m_ftpPar.m_strSrv));
+				ftpClient.connect(m_ftpPar.m_strSrv, m_ftpPar.m_nPort);
+			}
+			catch (Exception e)
+			{
+				CGlobal.Sleep(1000);
+			}
+		}
+
+		if (!ftpClient.isConnected())
+			failed(ftpClient);
+
+		for (int i = 0; i < nCount; i++)
+		{
+			if (ftpClient.isAuthenticated())
+				break;
+
+			try
+			{
+				m_cbFtpMsg.onReceived(String.format("开始登陆%1s", m_ftpPar.m_strUser));
+				ftpClient.login(m_ftpPar.m_strUser, m_ftpPar.m_strPwd);
+			}
+			catch (Exception e)
+			{
+				CGlobal.Sleep(1000);
+			}
+		}
+
+		if (!ftpClient.isAuthenticated())
+			failed(ftpClient);
+	}
+
+	//开始下载文件
+	public void startDownload(final String remoteFile)
+	{
+		new Thread(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				try
+				{
+					Login(m_clientParent);	// 登陆
+
+					if (m_clientParent.isAuthenticated())
+					{
+						// 开启FTP下载
+						m_lFleSize = m_clientParent.fileSize(remoteFile); //文件大小
+						close(m_clientParent);	//关闭
+
+						m_cbFtpMsg.onReceived(String.format("请求下载%1s，大小：%2s", remoteFile,
+								CGlobal.getSizeString(m_lFleSize)));
+						ftpTransListener listener;
+						DownThread downThread;
+						long latSize = m_lFleSize / m_ftpPar.m_nThreadNum;
+						m_dateStart = new Date();
+						for (int i = 0; i < m_ftpPar.m_nThreadNum; i++)
+						{
+							listener = new ftpTransListener(i);
+							downThread = new DownThread(remoteFile, m_strTmpFile + "_" + i, latSize * i, listener);
+							new Thread(downThread).start();
+							m_listListenTrans.add(listener);
+							m_listDownThread.add(downThread);
+						}
+					}
+					else
+					{
+						failed(m_clientParent);
+					}
+				}
+				catch (Exception e)
+				{
+					// e.printStackTrace();
+				}
+			}
+		}).start();
+	}
+
+	//关闭下载
+	private void close(FTPClient ftpClient)
+	{
+		try
+		{
+			Log.d("", "Close");
+
+			if (ftpClient.isConnected())
+			{
+				ftpClient.logout();
+				ftpClient.disconnect(true);
+			}
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	//---------------------------------------------------------------------
+	//线程下载
+	class DownThread implements Runnable
+	{
+        private String m_strRemoteFile;		//需要下载的文件
+        private String m_strLocFile;		//本地文件
+        private long m_lStartLoc;			//开始下载文件位置
+        public FTPClient m_clientDown;
+        private ftpTransListener m_listenTrans;	
+        
+        public DownThread(String fileName,String locFile,long begin,ftpTransListener listener)
+        {
+        	m_strRemoteFile = fileName;
+        	m_strLocFile = locFile;
+        	m_lStartLoc = begin;
+        	m_listenTrans = listener;
+        	
+        	//m_clientDown.up
+        }
+
+		public void run()
+		{
+			m_clientDown = new FTPClient();
+			try
+			{
+				Login(m_clientDown); //登录
+				//m_clientDown.setCharset("utf8");
+				if (m_clientDown.isAuthenticated()) //已经登录
+					m_clientDown.download(m_strRemoteFile, new File(m_strLocFile), m_lStartLoc, m_listenTrans);
+			}
+			catch (Exception e)
+			{
+				e.printStackTrace();
+			}
+		}
+	}
+        
+	//传输监听
+	public class ftpTransListener implements FTPDataTransferListener
+	{
+		private int m_nIndex;			//索引
+		private int m_nTransLenSum = 0;	//已传输字节数
+		private boolean m_bThreadSuc = false;	//是否下载成功
+		public boolean m_bThreadFished = false;
+		
+		public ftpTransListener(int index)
+		{
+			m_nIndex = index;
+		}
+		
+		//获取已传输字节数
+		public int getTransSize()
+		{
+			return m_nTransLenSum;
+		}
+		
+		@Override
+		public void aborted() //终止
+		{
+			m_bThreadSuc = true;
+			m_dateEnd = new Date();
+			m_bThreadFished = true;
+		}
+
+		@Override
+		public void completed()
+		{
+			m_bThreadSuc = true;
+			m_dateEnd = new Date();
+			m_bThreadFished = true;
+		}
+
+		@Override
+		public void failed()
+		{
+			m_bThreadSuc = false;
+			m_bThreadFished = true;
+		}
+
+		@Override
+		public void started()
+		{
+			// 倒计时自动关闭下载
+			if(!m_bStartTime)
+			{
+				m_bStartTime = true;
+				m_timer.schedule(m_endTransfer, m_ftpPar.m_nTimeout);
+				m_timer.schedule(m_recSpeed, 0, m_nRecInterval);
+			}
+		}
+
+		@Override
+		public void transferred(int arg0)
+		{
+			if(IsGetData())
+				m_nTransLenSum += arg0;	//累加
+		}
+	}
+	
+	//是否开始获取测试数据
+	private boolean IsGetData()
+	{
+		long lCurTime = System.currentTimeMillis();
+		if(m_dateStart.getTime() + m_ftpPar.m_nTimeout - lCurTime > m_lEclipTime
+				&& lCurTime - m_dateStart.getTime() > m_lEclipTime )
+			return true;
+		return false;
+	}
+	
+	public boolean getSucStatus()
+	{
+		for (int i = 0; i < m_listListenTrans.size(); i++)
+		{
+			if(m_listListenTrans.get(i).m_bThreadSuc)
+			{
+				m_bSucced = true;
+				break;
+			}
+		}
+		return m_bSucced;
+	}
+	
+	//获取完成标志
+	public boolean getFinished()
+	{
+		if(m_bFinished)
+			return m_bFinished;
+		
+		for (int i = 0; i < m_listListenTrans.size(); i++)
+		{
+			if(!m_listListenTrans.get(i).m_bThreadFished)
+			{
+				m_bFinished = false;
+				break;
+			}
+			else 
+				m_bFinished = true;
+		}
+		
+		return m_bFinished;
+	}
+
+	public void failed(FTPClient ftpClient)
+	{
+		Log.d("", "failed");
+		m_bSucced = false;
+		close(ftpClient); 
+		m_bFinished = true;
+	}
+	
+	public int getLoadTime()
+	{
+		if (m_dateEnd != null && m_dateStart != null)
+			return (int) (m_dateEnd.getTime() - m_dateStart.getTime() - m_lEclipTime * 2); //减去前后时间
+		else
+			return -1;
+	}
+
+	//获取所有子线程的下载量
+	public long getDownSizeSum()
+	{
+		long lSizeSum = 0;
+		for (int i = 0; i < m_listListenTrans.size(); i++)
+		{
+			lSizeSum += m_listListenTrans.get(i).getTransSize();
+		}
+		return lSizeSum;
+	}
+	
+	//返回平均速率，单位B/s
+	public double getAvgSpeed()
+	{
+		double dSpeed = 0;
+		if(m_nSpeedCount > 0)
+			return m_dSpeedSum / m_nSpeedCount;
+		
+		return dSpeed;
+		/*int avgTime = getLoadTime();
+		if (avgTime == -1)
+			return 0;
+		else
+			return getDownSizeSum() / avgTime * 1000;
+			*/
+	}
+
+	@Override
+	public void sent(String arg0)
+	{
+	}
+
+	@Override
+	public void received(String arg0)
+	{
+		Log.d("", "received:" + arg0);
+		if (arg0.contains("425 Can't open data connection."))
+		{
+			failed(m_clientParent);
+		}
+	}
+}
+
+
+/*	@Override
+	public void aborted()
+	{
+		Log.d("", "aborted");
+		m_bSucced = true;
+		m_dateEnd = new Date();
+		close();
+		m_bFinished = true;
+	}
+
+	@Override
+	public void completed()
+	{
+		Log.d("", "completed");
+		m_bSucced = true;
+		m_dateEnd = new Date();
+		close();
+		m_bFinished = true;
+	}
+
+	@Override
+	public void failed()
+	{
+		Log.d("", "failed");
+		m_bSucced = false;
+		close();
+		m_bFinished = true;
+	}
+
+	@Override
+	public void started()
+	{
+		Log.d("", "started");
+		m_dateStart = new Date();
+
+		// 倒计时自动关闭下载
+		m_timer.schedule(m_endTransfer, m_strTmeout);
+		m_timer.schedule(recordSpeed, 0, m_nRecInterval);
+	}
+
+	@Override
+	public void transferred(int length)
+	{
+		// Log.d("", "下载长度：" + length);
+		m_lDownSize += length;
+	}
+*/

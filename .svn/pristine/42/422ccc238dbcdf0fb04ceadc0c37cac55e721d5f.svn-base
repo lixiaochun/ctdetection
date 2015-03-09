@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="35dp"
+    android:layout_marginLeft="10dp"
+    android:layout_marginRight="10dp"
+    android:background="@drawable/signal_head_bk"
+    android:gravity="center"
+    android:orientation="horizontal" >
+
+    <!-- 信号测量标识头 -->
+
+    <TextView
+        android:id="@+id/signal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="3dp"
+        android:text="信号"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp" />
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="5dp" >
+
+        <TextView
+            android:id="@+id/signalinfo_4g"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="4G"
+            android:textColor="#7BC351"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/ltetype"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_alignRight="@id/signalinfo_4g"
+            android:gravity="bottom"
+            android:text="F"
+            android:textSize="10sp" />
+    </RelativeLayout>
+
+    <ImageView
+        android:id="@+id/signal_4g"
+        android:layout_width="30dp"
+        android:layout_height="30dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="3dp"
+        android:text="3G"
+        android:textColor="#FEAF47"
+        android:textSize="15sp" />
+
+    <ImageView
+        android:id="@+id/signal_3g"
+        android:layout_width="30dp"
+        android:layout_height="30dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="3dp"
+        android:text="2G"
+        android:textColor="#FEAF47"
+        android:textSize="15sp" />
+
+    <ImageView
+        android:id="@+id/signal_2g"
+        android:layout_width="30dp"
+        android:layout_height="30dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="3dp"
+        android:text="GSM"
+        android:textColor="#CC99FF"
+        android:textSize="15sp" />
+
+    <ImageView
+        android:id="@+id/signal_gsm"
+        android:layout_width="30dp"
+        android:layout_height="30dp" />
+
+    <TextView
+        android:id="@+id/teststate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="就绪 "
+        android:textColor="#FFFF00"
+        android:textSize="15sp" />
+
+</LinearLayout>

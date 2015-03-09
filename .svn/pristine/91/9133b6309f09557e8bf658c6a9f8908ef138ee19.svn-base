@@ -1,0 +1,334 @@
+package com.wellcell.inet.Task.Ftp;
+
+import org.json.JSONArray;
+
+import android.content.Context;
+
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Common.CGlobal.TestState;
+import com.wellcell.inet.Task.AbsTask;
+import com.wellcell.inet.Task.TaskPar.FtpPar;
+import com.wellcell.inet.Task.TaskRankPar;
+import com.wellcell.inet.Task.Ftp.FtpHelper.FtpMsgCallback;
+
+public class FtpTestTask extends AbsTask implements FtpMsgCallback
+{
+	public FtpPar m_FtpPar;		//配置参数
+
+	//时延
+	public int m_nTimeMax = Integer.MIN_VALUE;// 只计算成功的,毫秒
+	public int m_nTimeMin = Integer.MAX_VALUE;// 只计算成功的,毫秒
+	public int m_nTimeAvg = 0;// 只计算成功的,毫秒
+	
+	public int m_nCountSuc = 0;		//成功次数
+	public int m_nTestCount = 0;	//实际测试总次数
+
+	public long m_lRemoteFileSize = 0;		//下载文件的大小
+	//实际下载的大小
+	public long m_lDownSizeMax = Long.MIN_VALUE;
+	public long m_lDownSizeMin = Long.MAX_VALUE;
+	public long m_lDownSizeAvg = 0;
+	
+	//速率(Byte/s)
+	public double m_dSpeedMax = Double.MIN_VALUE;
+	public double m_dSpeedMin = Double.MAX_VALUE;
+	public double m_dSpeedAvg = 0;
+	public int m_nSpeedCount = 0;		//速率记录数
+
+	//----------------辅助字段-----------------------------
+	// 记录总时间
+	public int m_nTimeSum = 0;
+	public int m_nTimeSuc = 0;	//下载时间
+	
+	// 记录总流量
+	public long m_lSizeSum = 0;
+	public long m_lSizeSuc = 0;
+
+	// 记录一次测试的信息
+	class TaskDetail
+	{
+		public int nTime = 0;			//用时(毫秒)
+		public boolean bSuc = false;	//是否成功
+		public long lPageSize = 0;	//耗费的浏览
+
+		//速率,单位B/s
+		public double dSpeedMax = Double.MIN_VALUE;
+		public double dSpeedMin = Double.MAX_VALUE;
+		public double dSpeedAvg = 0;
+		public int nSpeedCount = 0;		//速率记录数
+	}
+
+	public FtpTestTask(Context context, FtpPar par,boolean bAuto,String strTaskID,boolean bAnteTest,boolean bBtsInfo)
+	{
+		super(TaskType.FTP, context, bAuto,strTaskID,bAnteTest,bBtsInfo);
+		m_FtpPar = par;
+	}
+
+
+	@Override
+	public void recordStop()
+	{
+		super.recordStop();
+
+		sendMessage(String.format("\n-----任务结果-----" + "\n最大速率:%1s\n最小速率:%2s\n平均速率:%3s\n成功打开次数:%4s" 
+		+ "\n总尝试次数:%5s\n服务器文件大小：%6s\n平均下载大小：%7s\n平均用时：%8s毫秒", CGlobal.getSpeedString(m_dSpeedMax), 
+		CGlobal.getSpeedString(m_dSpeedMin), CGlobal.getSpeedString(m_dSpeedAvg), m_nCountSuc, m_nTestCount, 
+		CGlobal.getSizeString(m_lRemoteFileSize), CGlobal.getSizeString(m_lDownSizeAvg), m_nTimeAvg));
+	};
+
+	public FtpTestTask()
+	{
+	}
+
+	@Override
+	protected void runningTask()
+	{
+		if(m_FtpPar.m_nCount <= 0)
+			return;
+		
+		// 开启测试
+		TaskDetail taskDetail;
+		for (int i = 0; i < m_FtpPar.m_nCount && m_curState == TestState.eTesting; i++)
+		{
+			sendMessage(String.format("第%1s次测试开始", i + 1));
+			sendMessage("----------");
+
+			taskDetail = downFile();	//测试
+			statisData(taskDetail);	//实时统计
+			
+			sendMessage("----------");
+			sendMessage(String.format("第%1s次测试完成，成功：%2s，用时：%3s毫秒，平均速率：%4s，流量：%5s", i + 1,
+					taskDetail.bSuc, taskDetail.nTime, CGlobal.getSpeedString(taskDetail.dSpeedAvg), 
+					CGlobal.getSizeString(taskDetail.lPageSize)));
+
+			CGlobal.Sleep(5000);	//间隔时延
+		}
+		
+		//---------------------完成后统计-------------------------------------
+		// 记录平均值
+		if (m_nCountSuc > 0)
+			m_nTimeAvg = m_nTimeSuc / m_nCountSuc;
+		else
+			m_nTimeAvg = -1;
+		
+		//计算平均速率
+		m_lDownSizeAvg = m_lSizeSuc / m_FtpPar.m_nCount;
+		if (m_nTimeSuc > 0)
+			m_dSpeedAvg = m_lSizeSuc / m_nTimeSuc * 1000; // 单位B/s
+		else
+			m_dSpeedAvg = -1;
+
+		// 最大值、最小值无效化处理
+		m_lDownSizeMax = CGlobal.getInvalidVal(m_lDownSizeMax);
+		m_lDownSizeMin = CGlobal.getInvalidVal(m_lDownSizeMin);
+		m_dSpeedMax = CGlobal.getInvalidVal(m_dSpeedMax);
+		m_dSpeedMin = CGlobal.getInvalidVal(m_dSpeedMin);
+		m_nTimeMax = CGlobal.getInvalidVal(m_nTimeMax);
+		m_nTimeMin = CGlobal.getInvalidVal(m_nTimeMin);
+		//---------------------------------------------------------------
+	}
+	
+	/**
+	 * 功能:实时统计数据
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	private void statisData(TaskDetail td)
+	{
+		m_nTestCount++;	//实际测试次数
+		if (td.bSuc)
+		{
+			m_nCountSuc++;	//成功次数
+			
+			m_nSpeedCount += td.nSpeedCount;	//速率记录数
+			
+			//-----------------------用时------------------------
+			if (td.nTime > m_nTimeMax)	// 记录最大值
+				m_nTimeMax = td.nTime;
+			
+			if (td.nTime < m_nTimeMin)	// 记录最小值
+				m_nTimeMin = td.nTime;
+			
+			//--------------------大小----------------------------
+			if (td.lPageSize > m_lDownSizeMax)
+				m_lDownSizeMax = td.lPageSize;
+			
+			if (td.lPageSize < m_lDownSizeMin)
+				m_lDownSizeMin = td.lPageSize;
+			
+			//-------------------速率----------------------------
+			if (td.dSpeedMax > m_dSpeedMax)
+				m_dSpeedMax = td.dSpeedMax;
+			
+			if (td.dSpeedMin < m_dSpeedMin)
+				m_dSpeedMin = td.dSpeedMin;
+		}
+		
+		m_nTimeSuc += td.nTime;	//成功测试的时间(不管成功与否)
+		m_lSizeSuc += td.lPageSize;
+		
+		// 记录流量不管成功失败
+		m_lSizeSum += td.lPageSize;
+		m_nTimeSum += td.nTime;
+	}
+	//-----------------------------------------------------------------------------
+	@Override
+	protected JSONArray getTaskDataJson()	//返回业务数据json
+	{
+		JSONArray obj = new JSONArray();
+		
+		obj.put(m_strTID);
+		obj.put(m_FtpPar.m_strSrv);
+		obj.put(m_FtpPar.m_nPort + "");
+		obj.put(m_FtpPar.m_strUser);
+		obj.put(m_FtpPar.m_strRemoteFile);
+		obj.put(m_FtpPar.m_nTimeout + "");
+		obj.put(m_FtpPar.m_nCount + "");
+
+		obj.put(m_nTimeMax + "");
+		obj.put(m_nTimeMin + "");
+		obj.put(m_nTimeAvg + "");
+		// 增加流量字段
+		obj.put(m_lRemoteFileSize + "");
+		obj.put(m_lDownSizeMax + "");
+		obj.put(m_lDownSizeMin + "");
+		obj.put(m_lDownSizeAvg + "");
+		
+		obj.put(m_nCountSuc + "");
+		obj.put(m_nTestCount + "");
+
+		obj.put(CGlobal.floatFormatString(m_dSpeedMax,2));
+		obj.put(CGlobal.floatFormatString(m_dSpeedMin,2));
+		obj.put(CGlobal.floatFormatString(m_dSpeedAvg,2));
+		obj.put(m_nSpeedCount + "");
+		
+		return obj;
+	}
+
+	@Override
+	protected String getTaskDetailReport()
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("FTP地址：%1s\n", m_FtpPar.m_strSrv));
+		sb.append(String.format("端口：%1s\n", m_FtpPar.m_nPort));
+		sb.append(String.format("用户名：%1s\n", m_FtpPar.m_strUser));
+		sb.append(String.format("文件名：%1s\n", m_FtpPar.m_strRemoteFile));
+		sb.append(String.format("下载时长：%1s秒\n", m_FtpPar.m_nTimeout / 1000));
+		// sb.append(String.format("重复次数：%1s\n", this.repeatCount));
+
+		sb.append(String.format("成功次数/总次数：%1s/%2s\n", this.m_nCountSuc, this.m_nTestCount));
+
+		sb.append(String.format("最大/平均/最小用时：\n%1s/%2s/%3s秒\n", CGlobal.getSecondString(this.m_nTimeMax), 
+				CGlobal.getSecondString(this.m_nTimeAvg), CGlobal.getSecondString(this.m_nTimeMin)));
+
+		sb.append(String.format("文件大小：%1s\n", CGlobal.getSizeString(this.m_lRemoteFileSize)));
+		sb.append(String.format("最大/平均/最小下载大小：\n%1s/%2s/%3s\n", CGlobal.getSizeString(this.m_lDownSizeMax),
+				CGlobal.getSizeString(this.m_lDownSizeAvg), CGlobal.getSizeString(this.m_lDownSizeMin)));
+
+		sb.append(String.format("最高/平均/最小速率：\n%1s/%2s/%3skbps\n", CGlobal.getSpeedKbps(m_dSpeedMax),
+				CGlobal.getSpeedKbps(this.m_dSpeedAvg), CGlobal.getSpeedKbps(this.m_dSpeedMin)));
+
+		return sb.toString();
+	}
+
+	private TaskDetail downFile()
+	{
+		String tmpFile = m_Context.getFilesDir().getAbsolutePath() + "tmp.1";
+		FtpHelper helper = new FtpHelper(m_FtpPar,tmpFile, this);
+		
+		helper.startDownload(m_FtpPar.m_strRemoteFile);	//开始下载文件
+
+		int nCount = m_FtpPar.m_nTimeout / 500 * 2;
+		while (!helper.m_bFinished && nCount-- > 0)
+		{
+			CGlobal.Sleep(500);
+		}
+
+		TaskDetail taskDetail = new TaskDetail();
+		taskDetail.nTime = helper.getLoadTime();
+		taskDetail.dSpeedMax = helper.m_dSpeedMax;
+		taskDetail.dSpeedMin = helper.m_dSpeedMin;
+		taskDetail.dSpeedAvg = helper.getAvgSpeed();
+		taskDetail.nSpeedCount = helper.m_nSpeedCount;
+		taskDetail.bSuc = helper.getFinished();
+		taskDetail.lPageSize = helper.getDownSizeSum();
+
+		if (this.m_lRemoteFileSize == 0)
+			this.m_lRemoteFileSize = helper.m_lFleSize;
+
+		return taskDetail;
+	}
+
+	@Override
+	public void onReceived(String msg)
+	{
+		sendMessage(msg);
+	}
+
+	@Override
+	public String getSimpReport()
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("成功次数/总次数：%1s / %2s\n", this.m_nCountSuc, this.m_nTestCount));
+
+		sb.append(String.format("最大/平均/最小用时：\n%1s/%2s/%3s 秒\n", 
+				CGlobal.getSecondString(this.m_nTimeMax), CGlobal.getSecondString(this.m_nTimeAvg), 
+				CGlobal.getSecondString(this.m_nTimeMin)));
+
+		sb.append(String.format("文件大小：%1s\n", CGlobal.getSizeString(this.m_lRemoteFileSize)));
+		sb.append(String.format("最大/平均/最小下载大小：\n%1s / %2s / %3s\n", 
+				CGlobal.getSizeString(this.m_lDownSizeMax), 
+				CGlobal.getSizeString(this.m_lDownSizeAvg), 
+				CGlobal.getSizeString(this.m_lDownSizeMin)));
+
+		sb.append(String.format("最高/平均/最小速率：\n%1s/%2s/%3s kbps\n", 
+				CGlobal.getSpeedKbps(this.m_dSpeedMax), 
+				CGlobal.getSpeedKbps(this.m_dSpeedAvg), 
+				CGlobal.getSpeedKbps(this.m_dSpeedMin)));
+
+		return sb.toString();
+	}
+
+	@Override
+	protected String getTaskScoreReport()
+	{
+		if(m_taskRankPar == null)
+			m_taskRankPar = TaskRankPar.getInsant(m_Context);
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("评价：%1s（%2s）\n", m_taskRankPar.getTaskRankName(m_nTaskVal), m_nTaskVal));
+		sb.append(String.format("平均速率得分：%1s\n", getSpeedValString()));
+		sb.append(String.format("平均时延得分：%1s\n", getDelayValString()));
+		sb.append(String.format("成功率得分：%1s\n", getSucRateValString()));
+		return sb.toString();
+	}
+
+	@Override
+	protected double getSpeedAvg()
+	{
+		if(m_dSpeedAvg < 0)
+			return -1;
+		
+		return m_dSpeedAvg * 8.0 / 1000;
+	}
+
+	@Override
+	protected double getDelayAvg()
+	{
+		return -1;
+	}
+
+	@Override
+	protected double getSucRate()
+	{
+		return m_nCountSuc * 1.0 / m_nTestCount * 100.0;
+	}
+
+
+	@Override
+	protected JSONArray getTaskRecJson(JSONArray objRec)
+	{
+		return null;
+	}
+}

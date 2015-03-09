@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="8dp"
+    android:background="@color/white" >
+
+    <ImageView
+        android:id="@+id/logo"
+        android:layout_width="wrap_content"
+        android:layout_height="128dp"
+        android:layout_centerHorizontal="true"
+        android:contentDescription="logo"
+        android:src="@drawable/logo" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/logo"
+        android:layout_margin="16dp"
+        android:background="@drawable/background_round_corner"
+        android:orientation="vertical"
+        android:padding="1dp" >
+
+        <Button
+            android:id="@+id/btn_welcome"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/btn_background_about"
+            android:drawableLeft="@drawable/huanyin_honver"
+            android:drawablePadding="8dp"
+            android:drawableRight="@drawable/xiangyou_hover"
+            android:gravity="left|center"
+            android:paddingEnd="16dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingStart="16dp"
+            android:text="欢迎"
+            android:textSize="16sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_feature"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/btn_background_about"
+            android:drawableLeft="@drawable/gongnengjieshao_hover"
+            android:drawablePadding="8dp"
+            android:drawableRight="@drawable/xiangyou_hover"
+            android:gravity="left|center"
+            android:paddingEnd="16dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingStart="16dp"
+            android:text="功能介绍"
+            android:textSize="16sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_update"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/btn_background_about"
+            android:drawableLeft="@drawable/banbengengxin_hover"
+            android:drawablePadding="8dp"
+            android:drawableRight="@drawable/xiangyou_hover"
+            android:gravity="left|center"
+            android:paddingEnd="16dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingStart="16dp"
+            android:text="版本更新"
+            android:textSize="16sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_feedback"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/btn_background_about"
+            android:drawableLeft="@drawable/fankui_hover"
+            android:drawablePadding="8dp"
+            android:drawableRight="@drawable/xiangyou_hover"
+            android:gravity="left|center"
+            android:paddingEnd="16dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingStart="16dp"
+            android:text="信息反馈"
+            android:textSize="16sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_website"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/btn_background_about"
+            android:drawableLeft="@drawable/ic_website"
+            android:drawablePadding="8dp"
+            android:drawableRight="@drawable/xiangyou_hover"
+            android:gravity="left|center"
+            android:paddingEnd="16dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingStart="16dp"
+            android:text="官网"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/copyright"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="8dp"
+        android:text="www.wellcell.com.cn"
+        android:textSize="12sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/copyright"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="4dp"
+        android:text="品质源于技术 服务造就未来"
+        android:textColor="#0000FF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+</RelativeLayout>

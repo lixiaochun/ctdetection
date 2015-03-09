@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black_eerie" >
+
+    <ImageView
+        android:id="@+id/logo"
+        android:layout_width="wrap_content"
+        android:layout_height="52dp"
+        android:layout_marginLeft="32dp"
+        android:layout_marginTop="16dp"
+        android:contentDescription="@string/icon"
+        android:gravity="center|center"
+        android:src="@drawable/detection" />
+
+    <View
+        android:id="@+id/sperate_one"
+        android:layout_width="256dp"
+        android:layout_height="0.4dp"
+        android:layout_alignParentRight="true"
+        android:layout_below="@id/logo"
+        android:layout_marginBottom="2dp"
+        android:layout_marginTop="16dp"
+        android:background="#55B2BEB5" />
+
+    <View
+        android:id="@+id/sperate_two"
+        android:layout_width="256dp"
+        android:layout_height="0.4dp"
+        android:layout_alignParentRight="true"
+        android:layout_below="@id/sperate_one"
+        android:layout_marginBottom="2dp"
+        android:layout_marginTop="32dp"
+        android:background="#55B2BEB5" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/sperate_two"
+        android:orientation="vertical" >
+
+        <Button
+            android:id="@+id/btn_tasktest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_yewuganzhi"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="业务感知"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_diagnose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_fuzhuzhenduan"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="辅助诊断"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_aidinfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_fuzhuxinxi"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="辅助信息"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+
+        <View
+            android:layout_width="256dp"
+            android:layout_height="0.4dp"
+            android:layout_gravity="right"
+            android:layout_marginBottom="2dp"
+            android:layout_marginTop="2dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_onekey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_yijianceshi"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="一键测试"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btn_testrec"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_ceshijilu"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="测试记录"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+        <Button
+            android:id="@+id/btn_quit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/ic_quit"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:paddingLeft="32dp"
+            android:text="退出"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:gravity="left|center|center"
+        android:orientation="horizontal"
+        android:padding="16dp" >
+
+        <Button
+            android:id="@+id/btn_setting"
+            android:layout_width="92dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_shezhi"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:padding="2dp"
+            android:text="设置"
+            android:textColor="#F2F3F4"
+            android:textSize="12sp" />
+
+        <View
+            android:id="@+id/seperate_three"
+            android:layout_width="0.4dp"
+            android:layout_height="32dp"
+            android:layout_marginRight="8dp"
+            android:background="#55B2BEB5" />
+
+        <Button
+            android:id="@+id/btn_about"
+            android:layout_width="102dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/btn_background_sidebar"
+            android:drawableLeft="@drawable/btn_guanyu"
+            android:drawablePadding="16dp"
+            android:gravity="left|center"
+            android:padding="2dp"
+            android:text="关于"
+            android:textColor="#F2F3F4"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+</RelativeLayout>

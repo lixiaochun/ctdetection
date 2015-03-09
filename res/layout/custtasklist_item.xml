@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/listview_item_pressed_style"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <CheckBox
+        android:id="@+id/cbCheckBox"
+        android:layout_width="0px"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.1"
+        android:button="@drawable/checkbox_checked_style"
+        android:textColor="@color/black"
+        android:textSize="14dp"
+        android:focusable="false" />
+
+    <TextView
+        android:id="@+id/tvAvgSpeed"
+        android:layout_width="0px"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_weight="1.4"
+        android:clickable="false"
+        android:textColor="#1999E5"
+        android:textSize="14dp" />
+
+    <TextView
+        android:id="@+id/tvSize"
+        android:layout_width="0px"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_weight="1"
+        android:clickable="false"
+        android:textColor="#1999E5"
+        android:textSize="14dp" />
+
+    <TextView
+        android:id="@+id/tvDelay"
+        android:layout_width="0px"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_weight="1"
+        android:clickable="false"
+        android:textColor="#1999E5"
+        android:textSize="14dp" 
+        android:visibility="gone"/>
+
+</LinearLayout>

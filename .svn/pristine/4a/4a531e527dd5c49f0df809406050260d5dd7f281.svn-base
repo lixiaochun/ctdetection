@@ -1,0 +1,43 @@
+package com.wellcell.MainFrag;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.RadioGroup;
+import android.widget.RadioGroup.OnCheckedChangeListener;
+
+import com.wellcell.ctdetection.R;
+
+public class SettingActivity extends Activity implements OnCheckedChangeListener
+{
+	@Override
+	public void onCreate(Bundle savedInstanceState)
+	{
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_setting);
+		RadioGroup group = (RadioGroup) findViewById(R.id.radioGroup);
+		group.setOnCheckedChangeListener(this);
+		getActionBar().setTitle(R.string.Setting);
+	}
+
+	@Override
+	public void onCheckedChanged(RadioGroup arg0, int arg1)
+	{
+		// TODO Auto-generated method stub
+		switch (arg0.getCheckedRadioButtonId())
+		{
+		case R.id.schedule:
+			findViewById(R.id.pick_time).setVisibility(View.VISIBLE);
+			findViewById(R.id.byhand).setVisibility(View.GONE);
+			break;
+		case R.id.single:
+			findViewById(R.id.pick_time).setVisibility(View.GONE);
+			findViewById(R.id.byhand).setVisibility(View.GONE);
+			break;
+		case R.id.handle:
+			findViewById(R.id.byhand).setVisibility(View.VISIBLE);
+			findViewById(R.id.pick_time).setVisibility(View.GONE);
+			break;
+		}
+	}
+}

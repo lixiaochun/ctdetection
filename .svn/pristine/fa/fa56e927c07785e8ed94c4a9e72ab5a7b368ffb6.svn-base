@@ -1,0 +1,404 @@
+package com.wellcell.inet.Task.Web;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+
+import com.wellcell.inet.Task.TaskPar.WebPar;
+
+
+public class HttpSocket
+{
+	//网页结果信息
+	final public static int Web_Suc = 1;	//成功
+	final public static int Web_LinkFail = -1;		//连接失败
+	final public static int Web_LinkTO = -2;		//连接超时
+	final public static int Web_DownLoadFail = -3;	//下载失败
+	final public static int Web_SendHeadFail = -4;	//发送头失败
+	final public static int Web_GetHeadFail = -5;	//获取头失败
+	final public static int Web_DownLoadTO = -6;	//下载超时
+	final public static int Web_OpenFail = -7;		//打开失败
+	final public static int Web_OpenOTO = -8;		//打开超时
+	
+	private static int MAXHEADLEN = 2048; //响应头最大长度
+	
+	private WebPar m_webPar;
+	private int m_nPort; 		//端口号
+	private String m_strHost; 	//目标地址
+	private String m_strWebPath = "/";
+	private String m_strPath;	//文件路径
+
+	private Socket m_socketClient;
+	private BufferedInputStream m_bufInputStream; //接收字节数
+
+	//private BufferedReader m_bufRx;
+	private BufferedWriter m_bufTx;
+
+	private String m_strResponHead = null; //HTTP消息返回头
+	private long m_lContentLen = 0; //
+	private String m_strChartSet = null; //编码方式
+	
+	//--------------------------------------------------
+	private long m_lStartTime = 0;	//开始时间
+	private WebRet m_webRet; 	//测试结果
+	private boolean m_bStop = false;	//是否停止测试
+	
+
+	public HttpSocket(WebPar par,String strPath)
+	{
+		m_webPar = par;
+		Init(m_webPar);	//初始化
+		
+		String host = par.m_strUrl;
+		String strHead = "http://";
+		if(host.startsWith(strHead))
+			host = host.substring(strHead.length());
+		
+		int nIndex = host.indexOf("/");
+		if(nIndex != -1)
+		{
+			m_strWebPath = host.substring(nIndex);
+			host = host.substring(0, nIndex);
+		}
+		m_strHost = host;
+		
+		m_nPort = m_webPar.m_nSport;
+		m_strPath = strPath;
+	}
+	
+	//初始化
+	private boolean Init(WebPar par)
+	{
+		try
+		{
+			m_webRet = new WebRet(par);
+			m_bStop = false;
+			
+			if(m_socketClient == null)
+				m_socketClient = new Socket();
+		}
+		catch (Exception e)
+		{
+			return false;
+		}
+		
+		return true;
+	}
+
+	//停止测试
+	public void stopTest()
+	{
+		m_bStop = true;
+	}
+	/**
+	 * 功能: 连接服务器
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public boolean connetServer()
+	{
+		Init(m_webPar);	//初始化
+		
+		try
+		{
+			m_lStartTime = System.currentTimeMillis();	//开始时间
+			m_webRet.m_lTime = m_lStartTime;
+			SocketAddress dest = new InetSocketAddress(m_strHost, m_nPort);
+			m_webRet.m_strDstIP = ((InetSocketAddress)dest).getAddress().getHostAddress();	//目标IP
+			m_webRet.m_lDnsParsTime = System.currentTimeMillis();	//DNS解析成功时间
+			m_socketClient.connect(dest); //连接服务器
+			m_webRet.m_lConnSucTime = System.currentTimeMillis();	//连接成功时间
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+			m_webRet.m_nRet = Web_LinkFail;
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * 功能: 发送请求头
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public boolean sendRequest()
+	{
+		OutputStreamWriter streamWriter;
+		try
+		{
+			streamWriter = new OutputStreamWriter(m_socketClient.getOutputStream());
+			m_bufTx = new BufferedWriter(streamWriter);
+
+			//String path = "/";
+			m_bufTx.write("GET " + m_strWebPath + " HTTP/1.1\r\n");
+			m_bufTx.write("Host: " + this.m_strHost + "\r\n");
+			m_bufTx.write("Accept:*/*\r\n");
+			m_bufTx.write("User-Agent:Mozilla/4.0 (compatible; MSIE 5.00; Windows 98)\r\n");
+			m_bufTx.write("Connection:Keep-Alive\r\n");
+			m_bufTx.write("\r\n");
+			m_bufTx.write("\r\n");
+			m_bufTx.flush(); //发送http请求头
+			m_webRet.m_lSendReqTime = System.currentTimeMillis();	//发送请求成功时间
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+			m_webRet.m_nRet = Web_SendHeadFail;	//发送失败
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * 功能:获取HTTP响应头
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public String getResponseHead()
+	{
+		try
+		{
+			m_bufInputStream = new BufferedInputStream(m_socketClient.getInputStream());
+
+			byte[] szHeads = new byte[MAXHEADLEN];
+			int nIndex = 0;
+			boolean bEndResp = false;
+			byte[] buf = new byte[1];
+			while (!bEndResp && nIndex < MAXHEADLEN && m_bufInputStream.read(buf) > 0) //循环读取内容
+			{
+				if(m_bStop)
+				{
+					m_webRet.m_nRet =  Web_GetHeadFail;
+					break;
+				}
+				szHeads[nIndex++] = buf[0];
+				if (nIndex >= 4)
+				{
+					//头结束判断 \r\n\r\n
+					if (szHeads[nIndex - 4] == '\r' && szHeads[nIndex - 3] == '\n' 
+							&& szHeads[nIndex - 2] == '\r' && szHeads[nIndex - 1] == '\n')
+						bEndResp = true;
+				}
+			}
+			m_strResponHead = new String(szHeads, 0, nIndex, "UTF-8");
+			//System.out.println(m_strResponHead);
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+			m_strResponHead = null;
+			m_webRet.m_nRet = Web_GetHeadFail;	//获取头失败
+		}
+		m_webRet.m_lRecResponTime = System.currentTimeMillis();	//接收响应头时间
+		//m_webRet.m_nLinkDelay = (int)(System.currentTimeMillis() - m_lStartTime);	//链接时延
+		//System.out.println("连接时延: " + m_lLinkDelay);
+		return m_strResponHead;
+	}
+
+	/**
+	 * 功能: 获取响应头相关属(编码方式/传输长度)
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public void getHeadPropirty()
+	{
+		if (m_strResponHead == null)
+			return;
+		
+		try
+		{
+			//编码方式
+			m_strChartSet = getField(m_strResponHead, "charset");
+			if (m_strChartSet == null)
+				m_strChartSet = "UTF-8";
+
+			//内容长度
+			m_lContentLen = getContentLen(m_strResponHead);
+			//System.out.println(m_strStatus + "/" + m_strChartSet + "/" + m_lContentLen);
+			
+			//状态
+			String strStatus = m_strResponHead.substring(0, m_strResponHead.indexOf("\r\n")); //提取第一行
+			String strVals[] = strStatus.split("\\s+");
+			if (strVals.length >= 2)
+				m_webRet.m_nHttpStatus = Integer.parseInt(strVals[1]);
+		}
+		catch (Exception e)
+		{
+		}
+	}
+
+	/**
+	 * 功能: 下载内容
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public boolean downLoadContent()
+	{
+		//输出文件
+		boolean bRet = true;
+		try
+		{
+			FileOutputStream fos = new FileOutputStream(m_strPath); 
+			OutputStreamWriter osw = new OutputStreamWriter(fos, m_strChartSet);
+
+			String strLine = null;
+			int nSum = 0; //总下载字节数
+			byte[] buf = new byte[1024];
+			int nLen = 0;
+			long lStartTime = System.currentTimeMillis();	//开始时间
+			while ((nLen = m_bufInputStream.read(buf)) > 0) //循环读取内容
+			{
+				if(m_bStop) //超时控制
+				{
+					m_webRet.m_nRet = Web_DownLoadTO;
+					bRet = false;
+					break;
+				}
+				
+				strLine = new String(buf, 0, nLen, m_strChartSet);
+				//System.out.println(strLine);
+
+				//下载网页内容
+				nSum += nLen;
+				outputFile(osw, strLine);
+
+				//下载完毕
+				if (m_lContentLen > 0) //有content-length
+				{
+					if (nSum >= m_lContentLen)
+						break;
+				}
+				else
+				{
+					//没有内容长度则使用结尾符
+					if (strLine.contains("</html>"))
+						break;
+				}
+			}
+			m_webRet.m_nWebSize = nSum;	//网页大小
+			m_webRet.m_nDownLoadDelay =  (int)(System.currentTimeMillis() - lStartTime); //下载时延
+			
+			osw.close();
+			fos.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+			m_webRet.m_nRet = Web_DownLoadFail;	//下载失败
+			bRet = false;
+		}
+		return bRet;
+	}
+
+	/**
+	 * 功能: 输出文件本地化
+	 * 参数:	outWriter: 
+	 * 		strLine: 
+	 * 返回值:
+	 * 说明:
+	 */
+	private void outputFile(OutputStreamWriter outWriter, String strLine)
+	{
+		if (outWriter == null || strLine == null)
+			return;
+
+		try
+		{
+			outWriter.write(strLine);
+			outWriter.flush();
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * 功能: 获取HTTE域对应的值
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	private String getField(String strSrc, String strKey)
+	{
+		try
+		{
+			if (strSrc.contains(strKey))
+			{
+				strSrc = strSrc.substring(strSrc.indexOf(strKey));
+				strSrc = strSrc.substring(strKey.length() + 1, strSrc.indexOf("\r\n"));
+				return strSrc.trim();
+			}
+			else
+				return null;
+		}
+		catch (Exception e)
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * 功能: 获取Content-Length
+	 * 参数:	strLine: 
+	 * 返回值:
+	 * 说明:
+	 */
+	private long getContentLen(String strResPonseHead)
+	{
+		long lLen = 0;
+		try
+		{
+			String strRet = getField(strResPonseHead, "Content-Length");
+			if (strRet != null)
+				lLen = Long.parseLong(strRet);
+		}
+		catch (Exception e)
+		{
+		}
+		return lLen;
+	}
+	
+	//返回测试记录
+	public WebRet getWebRet()
+	{
+		return m_webRet;
+	}
+
+	//关闭,回收资源
+	public void close()
+	{
+		try
+		{
+			if (m_socketClient != null)
+			{
+				m_socketClient.close();
+				m_socketClient = null;
+			}
+			
+			if(m_bufInputStream != null)
+				m_bufInputStream.close();
+			
+			if(m_bufTx != null)
+				m_bufTx.close();
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+		}
+
+	}
+}

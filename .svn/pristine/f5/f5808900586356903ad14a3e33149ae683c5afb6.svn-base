@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">感知测试</string>
+    <string name="TaskTest">业务感知</string>
+    <string name="Diagnosis">辅助诊断</string>
+    <string name="AidInfo">辅助信息</string>
+    <string name="OneKey">一键测试</string>
+    <string name="TestRec">测试记录</string>
+    <string name="Setting">设置</string>
+    <string name="About">关于</string>
+    <string name="navigation">导航</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="action_settings">Settings</string>
+    <string name="icon">icon</string>
+    <string name="wifi">WIFI</string>
+    <string name="mobile_data">手机数据</string>
+    <string name="http">http</string>
+    <string name="video">视频</string>
+    <string name="network">网络类型</string>
+    <string name="test_time">测试时间</string>
+    <string name="operation_type">业务类型</string>
+    <string name="free">空闲</string>
+    <string name="used">已用</string>
+    <string name="records">测试记录:</string>
+    <string name="input_ip">输入待测地址或IP,默认百度</string>
+    <string name="hop_count">最大跳数,默认30</string>
+    <string name="delay">超时毫秒,默认2000</string>
+    <string name="ping_test">Ping测试</string>
+    <string name="test_result">测试结果</string>
+    <string name="baseband">基带版本</string>
+    <string name="upload_mode">数据上传模式</string>
+    <string name="begin">开始</string>
+    <string name="end">结束</string>
+    <string name="single">单次</string>
+    <string name="schedule">定时</string>
+    <string name="mode">模式</string>
+    <string name="threads">线程数</string>
+    <string name="thread_count">输入数字，默认为7</string>
+    <string name="input_amount">输入流量值</string>
+    <string name="data_setting">流量设置</string>
+    <string name="hand">手动</string>
+    <string name="upload">上传</string>
+    <string name="save">保存配置</string>
+
+</resources>

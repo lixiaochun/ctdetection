@@ -1,0 +1,36 @@
+package com.wellcell.MainFrag;
+
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+import com.wellcell.SubFrag.Diagnosis.PingFragment;
+import com.wellcell.ctdetection.R;
+import com.wellcell.inet.view.FragmentPage2;
+
+//辅助诊断主界面
+public class DiagnosisFragment extends AbsMainFragment {
+	@Override
+	View buildView(LayoutInflater inflater, ViewGroup container,
+			Bundle savedInstanceState) {
+		View view = inflater.inflate(R.layout.maimfragment, null);
+
+		m_classfrags = new Class[] { FragmentPage2.class, PingFragment.class,
+				FragmentPage2.class, FragmentPage2.class };
+		m_nImgViews = new int[] { R.drawable.btn_dnsjiance,
+				R.drawable.btn_pingceshi, R.drawable.btn_traceroute,
+				R.drawable.btn_wuxianxinhao };// , R.drawable.tab_selfinfo_btn,
+												// R.drawable.tab_square_btn,
+												// R.drawable.tab_more_btn };
+		m_strTabLables = new String[] { "DNS检测", "Ping", "Traceroute", "无线信号" };
+		return view;
+	}
+	@Override
+	public void onResume()
+	{
+		super.onResume();
+		// set action bar title
+		getActivity().getActionBar().setTitle(R.string.Diagnosis);
+	}
+}

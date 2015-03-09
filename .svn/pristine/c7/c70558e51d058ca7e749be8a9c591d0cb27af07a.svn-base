@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" 
+    android:padding="10dip">
+
+    <TextView
+        android:id="@+id/header"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:background="@drawable/txt_top"
+        android:gravity="center_vertical"
+        android:paddingLeft="10dip"
+        android:text="测试结果"
+        android:textColor="#000000"
+        android:textSize="18dip" />
+
+    <View
+        android:id="@+id/footer"
+        android:layout_width="fill_parent"
+        android:layout_height="10dip"
+        android:layout_alignParentBottom="true"
+        android:background="@drawable/txt_btm" />
+
+    <RelativeLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_above="@id/footer"
+        android:layout_below="@id/header" >
+
+        <com.wellcell.inet.view.QExListView
+            android:id="@+id/lv_task"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" 
+            android:cacheColorHint="#00000000">
+        </com.wellcell.inet.view.QExListView>
+    </RelativeLayout>
+
+</RelativeLayout>

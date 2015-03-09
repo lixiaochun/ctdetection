@@ -1,0 +1,461 @@
+package com.wellcell.inet.CQT;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.ProgressDialog;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.FragmentActivity;
+import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.ListView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.wellcell.ctdetection.DetectionApp;
+import com.wellcell.ctdetection.R;
+import com.wellcell.inet.CQT.TaskProgFragment.TaskInfoProvider;
+import com.wellcell.inet.CQT.TaskRetActivity.FragmentData;
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Common.CGlobal.ModuleIndex;
+import com.wellcell.inet.Common.CGlobal.TestState;
+import com.wellcell.inet.Common.ExtraInfo;
+import com.wellcell.inet.Common.InetDlg;
+import com.wellcell.inet.Common.InetDlg.DlgType;
+import com.wellcell.inet.DataProvider.PhoneDataProvider;
+import com.wellcell.inet.Log.InetLog.ActivityName;
+import com.wellcell.inet.Log.InetLog.LogLevel;
+import com.wellcell.inet.Task.AbsTask;
+import com.wellcell.inet.Task.AbsTask.TaskType;
+import com.wellcell.inet.Task.Web.WebObject;
+import com.wellcell.inet.Task.JobTest;
+
+//业务测试结果窗口
+public class TaskRetActivity extends FragmentActivity implements OnClickListener, TaskInfoProvider
+{
+	private DetectionApp m_inetApp;
+	private JobTest m_jobTest = null; //当前测试任务
+
+	private ProgressBar m_pbProg; //进度条
+	private TextView m_tvProg;
+	protected ProgressDialog m_pdLoading = null;
+
+	// ViewPagerAdapter
+	//private TaskRetAdapter m_adpTaskRet;
+	//private PageIndicator m_indicator;
+
+	private String m_strHotName = ""; //热点名称
+	private String m_strHotID = ""; //热点ID
+	private int m_nFloor; //楼层
+
+	private boolean m_bRunning = false;
+	private int m_nCurRunning = -1;
+
+	private TaskProgListener m_listenTaskProg;
+	//private TaskProgFragment m_fragTaskProg; //详细进度
+
+	private TextView m_tvLog; //过程数据
+	private StringBuffer m_bfLog;
+
+	// Fragment类型以及实体
+	public enum FragmentType
+	{
+		eProgress, //详细进度
+		eTaskReport, //测试报告
+		eSummaryReport //总体报告
+	}
+
+	public static class FragmentData
+	{
+		public FragmentType m_fragType; //类型
+		public String m_strTitle; //title
+		public int m_nIndex; //索引
+	}
+
+	//private List<FragmentData> m_listFragData = new ArrayList<FragmentData>();
+
+	// 接口
+	public static interface TaskProgListener
+	{
+		public void expandGroup(int index);
+
+		public void collapseGroup(int index);
+
+		public void notifyDataSetChanged();
+
+		public void invalidateGroupTop();
+
+		public void setTranscriptMode(int mode);
+	}
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState)
+	{
+		super.onCreate(savedInstanceState);
+		//requestWindowFeature(Window.FEATURE_NO_TITLE);
+		setContentView(R.layout.taskresult);
+
+		//findViewById(R.id.btn_back).setOnClickListener(this);		//返回按钮
+		findViewById(R.id.btn_report).setOnClickListener(this); //报告按钮
+		m_tvLog = (TextView) findViewById(R.id.tv_ret);
+		//-------------------------------------------------------------------------------------
+		//提取传递参数
+		/*if (getIntent().hasExtra(HotPointInfo.Extra_HotName)) //热点名称
+			m_strHotName = getIntent().getStringExtra(HotPointInfo.Extra_HotName);
+		
+		if (getIntent().hasExtra(HotPointInfo.Extra_HotID)) //热点ID
+			m_strHotID = getIntent().getStringExtra(HotPointInfo.Extra_HotID);
+		
+		if (getIntent().hasExtra(HotPointInfo.Extra_Floor)) //楼层信息
+			m_nFloor = getIntent().getIntExtra(HotPointInfo.Extra_Floor,Integer.MAX_VALUE);
+		*/
+		m_jobTest = new JobTest(this, ModuleIndex.eCQT, m_strHotName, m_strHotID, m_nFloor); //生成任务测试对象
+
+		// 获取Extra参数
+		if (getIntent().hasExtra(ExtraInfo.Extra_TaskInfo)) //是否包含测试任务信息
+		{
+			String strTaskInfo = getIntent().getStringExtra(ExtraInfo.Extra_TaskInfo);
+			m_jobTest.addTaskInfo(strTaskInfo); //添加测试任务
+		}
+		else
+			finish();
+		//---------------------------------------------------------------------------------
+		/*m_inetApp = (InetApplication)getApplicationContext();
+		m_inetApp.m_inetLog.setStartTime(ActivityName.eTaskRet);
+		*/
+		//((TextView) findViewById(R.id.tv_title)).setText(m_strHotName); //title
+
+		m_pbProg = (ProgressBar) findViewById(R.id.pb_progress);
+		m_pbProg.setMax(m_jobTest.getTaskInfoCount() + 1);
+		m_tvProg = (TextView) findViewById(R.id.tv_progress);
+
+		// 构建VIewPager数据
+		/*		FragmentData data = new FragmentData();
+				data.m_nIndex = -1;
+				data.m_strTitle = "详细进度";
+				data.m_fragType = FragmentType.eProgress;
+				m_listFragData.add(data);
+		*/
+		// 构建控件
+		/*TaskRetAdapter adapter = new TaskRetAdapter(getSupportFragmentManager());
+		ViewPager pager = (ViewPager) findViewById(R.id.menu_pager);
+		pager.setAdapter(adapter);
+
+		TitlePageIndicator indicator = (TitlePageIndicator) findViewById(R.id.indicator);
+		indicator.setViewPager(pager);
+		indicator.setFooterIndicatorStyle(IndicatorStyle.Underline);
+		this.m_indicator = indicator;
+		*/
+		// 开始任务
+		Toast.makeText(getApplicationContext(), "开始获取任务默认配置", Toast.LENGTH_SHORT).show();
+		m_hHandler.sendMessage(Message.obtain(m_hHandler, 1));
+		new Thread(getTaskPars).start(); //准备开始
+	}
+
+	private final Handler m_hHandler = new Handler()
+	{
+		@Override
+		public void handleMessage(Message msg)
+		{
+			switch (msg.what)
+			{
+			case 1: //显示配置对话框
+				m_pdLoading = InetDlg.ShowDlg(m_pdLoading, TaskRetActivity.this, DlgType.eTestLoading);
+				break;
+			case 2: //关闭对话框
+				InetDlg.DismissDlg(m_pdLoading);
+				break;
+			case 3: //展开
+				int nIndex = Integer.parseInt(msg.obj.toString());
+				if (m_listenTaskProg != null)
+					m_listenTaskProg.expandGroup(nIndex);
+				break;
+			case 4: //更新过程数据
+				if (msg.obj != null)
+				{
+					m_bfLog.append((String) msg.obj);
+					m_bfLog.append("\n");
+					m_tvLog.setText(m_bfLog.toString());
+				}
+				if (m_listenTaskProg != null)
+					m_listenTaskProg.notifyDataSetChanged();
+				break;
+			case 5:
+				nIndex = Integer.parseInt(msg.obj.toString());
+				if (m_listenTaskProg != null)
+					m_listenTaskProg.collapseGroup(nIndex);
+				break;
+			case 6: //获取业务配参数后处理
+				m_bfLog = new StringBuffer();
+				addTasks.run(); //主线程中执行
+				m_pbProg.setProgress(1);
+				break;
+			case 8: //完成测试
+				m_pbProg.setProgress(m_pbProg.getMax());
+				m_tvProg.setText("全部完成");
+
+				findViewById(R.id.summary_bar).setVisibility(View.GONE); // 隐藏进度条
+
+				// 添加ViewPager
+				/*FragmentData data = new FragmentData();
+				data.m_nIndex = -1;
+				data.m_strTitle = "总体报告";
+				data.m_fragType = FragmentType.eSummaryReport;
+				m_listFragData.add(data);
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 10));
+
+				showAllSimpRept();
+				*/break;
+			case 9:
+				if (m_listenTaskProg != null)
+					m_listenTaskProg.invalidateGroupTop();
+				break;
+			case 10:
+				//if (m_adpTaskRet != null)
+				//	m_adpTaskRet.notifyDataSetChanged();
+				break;
+			default:
+				break;
+			}
+		}
+	};
+
+	// 获取配置参数
+	private Runnable getTaskPars = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_jobTest.getTaskPar(); //获取业务配置参数
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, 6));
+		}
+	};
+
+	//添加测试任务
+	private Runnable addTasks = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_jobTest.addTaskByConfig(); //添加业务测试实体
+			new Thread(startTasks).start(); //开始测试
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, 2)); //关闭等待对话框
+		}
+	};
+
+	// 开始测试
+	private Runnable startTasks = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			if (m_listenTaskProg != null)
+				m_listenTaskProg.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
+
+			//Log.d("", "后台开始任务");
+			m_bRunning = true;
+			PhoneDataProvider.ScreenWakeLock(TaskRetActivity.this, false);
+			long lStartTime = System.currentTimeMillis(); //开始时间
+
+			m_jobTest.addRunTask(); //添加正在执行业务
+
+			AbsTask curTask;
+			int nTaskSum = m_jobTest.getTaskSum();
+			m_jobTest.onStart();
+			
+			WebObject webObj;
+			int nWebIndex = 0;
+			for (int i = 0; i < nTaskSum && m_bRunning; i++) //逐个执行业务
+			{
+				//更新UI
+				m_nCurRunning = i;
+				runOnUiThread(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						m_pbProg.setProgress(m_nCurRunning + 1);
+						m_tvProg.setText("正在进行：" + m_jobTest.getTaskName(m_nCurRunning));
+
+						//m_fragTaskProg.addTaskProgress(m_jobTest.getTaskInfo(m_nCurRunning));
+					}
+				});
+
+				curTask = m_jobTest.getTask(i);
+				curTask.m_lStartTime = lStartTime;
+
+				//Log.d("", "任务" + i + ":" + curTask.m_taskType.name());
+				if( curTask.m_taskType == TaskType.WEBSITE)
+				{
+					webObj = m_jobTest.m_listWebObj.get(nWebIndex++);
+					webObj.setNotify(m_hHandler, 4);
+					m_jobTest.m_jsonArrWebRec = webObj.runningTask(m_jobTest.m_jsonArrWebRec);
+				}
+				else if(curTask.m_taskType == TaskType.FTP)
+				{
+					curTask.setNotify(m_hHandler, 4,m_jobTest.m_jsonArrSpeed); //接受信息
+					curTask.StartTask(); //开始业务测试
+				}
+				else if(curTask.m_taskType == TaskType.VIDEO)
+				{
+					curTask.setNotify(m_hHandler, 4,m_jobTest.m_jsonArrVideo); //接受信息
+					curTask.StartTask(); //开始业务测试
+				}
+				else
+				{
+					curTask.setNotify(m_hHandler, 4,null); //接受信息
+					curTask.StartTask(); //开始业务测试
+				}
+				
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 4));
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 3, i));
+
+				// 等待当前任务结束
+				do
+				{
+					CGlobal.Sleep(1000);
+				}
+				while (curTask.m_curState == TestState.eTesting);
+
+				//--------------------单次业务测试完毕------------------------------
+				// 添加详细报告
+				//m_jobTest.addTaskDetail(i, curTask);
+				// 添加ViewPager
+				/*FragmentData data = new FragmentData();
+				data.m_nIndex = i;
+				data.m_strTitle = m_jobTest.getTaskName(i) + "报告";
+				data.m_fragType = FragmentType.eTaskReport;
+				m_listFragData.add(data);
+				*/
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 9));
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 10));
+			}
+			//--------------------------所有业务执行完毕-----------------------------------------------------
+			//m_jobTest.buildJobReport();// 构建总的任务数据
+
+			if (m_listenTaskProg != null)
+				m_listenTaskProg.setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
+
+			if (m_bRunning)
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, 8));
+
+			PhoneDataProvider.releaseWakeLock();
+			m_bRunning = false;
+
+			m_jobTest.onComplete(); //完成处理
+		}
+	};
+
+	@Override
+	protected void onDestroy()
+	{
+		//m_inetApp.m_inetLog.WriteLog(this, ModuleIndex.eCQT, ActivityName.eTaskRet, LogLevel.eActivityLog, "");
+
+		if (m_bRunning)
+		{
+			Log.d("", "停止当前任务");
+			m_bRunning = false;
+			m_jobTest.stopWithOutSave(m_nCurRunning);
+		}
+		super.onDestroy();
+	}
+
+	@Override
+	public void onClick(View v)
+	{
+		switch (v.getId())
+		{
+		case R.id.btn_back: //返回 按钮
+			finish();
+			break;
+		case R.id.btn_report: //
+			if (!m_bRunning)
+				showAllSimpRept();
+			break;
+		default:
+			break;
+		}
+	}
+
+	//显示总体报告
+	protected void showAllSimpRept()
+	{
+		/*for (int i = 0; i < m_listFragData.size(); i++)
+		{
+			FragmentData f = m_listFragData.get(i);
+			if (f.m_strTitle.equals("总体报告"))
+			{
+				//m_indicator.setCurrentItem(i);
+				break;
+			}
+		}*/
+	}
+
+	/*	class TaskRetAdapter extends FragmentPagerAdapter
+		{
+			public TaskRetAdapter(FragmentManager fm)
+			{
+				super(fm);
+			}
+
+			@Override
+			public Fragment getItem(int arg0)
+			{
+				FragmentData f = m_listFragData.get(arg0);
+				switch (f.m_fragType)
+				{
+				case eProgress:  //详细经度
+					m_fragTaskProg = TaskProgFragment.newInsance(TaskRetActivity.this,ModuleIndex.eCQT);
+					m_listenTaskProg = m_fragTaskProg;
+					return m_fragTaskProg;
+				case eSummaryReport:	//总体报告
+					return TaskReportFragment.newInsance(m_jobTest.m_htTaskSummary, true);
+				case eTaskReport:	//业务测试报告
+					return TaskReportFragment.newInsance(m_jobTest.m_listTaskDetails.get(f.m_nIndex), true);
+				}
+				return new Fragment();
+			}
+
+			@Override
+			public int getCount()
+			{
+				return m_listFragData.size();
+			}
+
+			@Override
+			public CharSequence getPageTitle(int position)
+			{
+				return m_listFragData.get(position).m_strTitle;
+			}
+		}
+	*///-----------------TaskInfoProvider---------------------------
+	@Override
+	public int getTaskCount()
+	{
+		return m_jobTest.getTaskSum();
+	}
+
+	@Override
+	public String getTaskLog(int index) //获取业务过程数据
+	{
+		return m_jobTest.getTask(index).getLog();
+	}
+
+	@Override
+	public TestState getTaskState(int index)
+	{
+		return m_jobTest.getTask(index).m_curState;
+	}
+
+	@Override
+	public int getCurPorgress()
+	{
+		return m_nCurRunning + 1;
+	}
+}

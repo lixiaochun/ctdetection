@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:layout_marginTop="2dp"
+    android:background="#FFFFFF"
+    android:stretchColumns="*" >
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="计费CellID: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/cid_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SID: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/sid_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="10dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NID: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/nid_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+        
+         <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3G_SNR: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/snr_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+    
+     <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3G_Rx: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rx_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3G_Ecio: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/ecio_3g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+
+    <TableRow
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp" >
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2G_Rx: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/rx_2g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+
+        <TableRow android:layout_width="1dip" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2G_Ecio: "
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/ecio_2g"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black" />
+        </TableRow>
+    </TableRow>
+
+   
+
+</TableLayout>

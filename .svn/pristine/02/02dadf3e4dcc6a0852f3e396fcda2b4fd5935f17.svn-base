@@ -1,0 +1,646 @@
+package com.wellcell.inet.Task;
+
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import android.content.Context;
+import android.content.Intent;
+import android.os.Handler;
+import android.util.Log;
+
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Common.CGlobal.ModuleIndex;
+import com.wellcell.inet.Common.CGlobal.TestState;
+import com.wellcell.inet.DataProvider.PhoneDataProvider;
+import com.wellcell.inet.Database.TestDataLoal;
+import com.wellcell.inet.Task.AbsTask.TaskType;
+import com.wellcell.inet.Task.Web.WebObject;
+import com.wellcell.inet.TaskList.TaskInfo;
+import com.wellcell.inet.TaskList.TaskUtil;
+import com.wellcell.inet.Web.WebUtil;
+
+//测试任务
+public class JobTest
+{
+	private String TAG = "JobTest";
+	
+	private Context m_Context = null;
+	private TestDataLoal m_testDataLoal = null;
+
+	//开始测试前业务列表信息
+	private List<TaskInfo> m_listTaskInfo;
+	private Hashtable<String, String> m_htTaskPar;//业务配置参数<业务ID,配置参数json>
+	
+	public List<WebObject> m_listWebObj = new ArrayList<WebObject>();
+	public JSONArray m_jsonArrWebRec;	//所有测试记录
+	public JSONArray m_jsonArrVideo;	//视频测试
+	public JSONArray m_jsonArrSpeed;	//测速
+	
+	//正在测试业务信息
+	private List<AbsTask> m_listTasks;		//所有需要测试业务
+	private List<AbsTask> m_listRunTasks; 	//当前运行业务
+
+	public Hashtable<String, String> m_htTaskSummary;			//总体报告
+	public List<Hashtable<String, String>> m_listTaskDetails;	//业务测试报告
+
+	//---------------------------------------------------------------------
+	public ModuleIndex m_moduleType;	//测试模块
+	
+	public String m_strJobID = null;	//任务ID(IMEI+时间戳)
+	public String m_strJobType;			//任务类型
+	public String m_strSubType = "-1";	//任务子类型,问题反馈有值,其他为-1-->转成运营商类型;0:电信,1:移动,2:联通
+	public long m_lStartTime;			//开始时间
+	public long m_lEndTime;				//结束时间
+	public String m_strUser;			//登录用户名
+	public String m_strIMSI;			//手机IMSI号码
+	public String m_strIMEI;			//手机设备国际识别码
+	public String m_strModel;			//手机终端型号
+	public int m_nUpLoadNetWork;		//上传数据使用网络
+	
+	//public int m_nUploadType;			//上传数据使用网络类型
+	
+	private boolean m_bAnteTest = false;//是否进行天馈测量,默认不开启
+	private boolean m_bBtsInfo = true;	//是否获取基站详细信息
+	
+	private String m_strHotName;		//热点名称
+	public String m_strHotID = "";		//热点ID
+	public String m_strFloor = "-99"; 	//楼层
+	//--------------------------------------------------------------------------
+	private Handler m_hHandler;
+	private int m_nWhat;
+	private int m_nNotifyID = -1;		//通知ID
+	private boolean m_bStop = false;	//是否停止测试
+	
+	//CQT测试
+	public JobTest(Context context,ModuleIndex moduleType,String strHot,String strHotID,int nFloor)
+	{
+		AbsTask.m_taskRankPar = null;	//初始化评分体系	
+		m_Context = context;
+		m_testDataLoal = new TestDataLoal(m_Context);	//数据本地化处理
+		//m_strJobType = ModuleCtrlHelper.getModuleType(moduleType) + "";	//任务类型
+		m_strSubType = PhoneDataProvider.getOperatorType(m_Context) + "";	//运营商
+		
+		//客户经理不进行天馈测量/不获取基站详细信息
+		if(moduleType == ModuleIndex.eCust)
+		{
+			m_bAnteTest = false;
+			m_bBtsInfo = false;
+		}
+		
+		m_strHotName = strHot;
+		m_strHotID = strHotID;
+		m_strFloor = nFloor + "";
+	
+		Init();	//初始化
+	}
+	
+	//自动测试
+	public JobTest(Context context,ModuleIndex moduleType,Handler handler,int nWhat,int nID)
+	{
+		m_Context = context;
+		//m_strJobType = ModuleCtrlHelper.getModuleType(moduleType) + "";	//任务类型
+		
+		m_hHandler = handler;
+		m_nWhat = nWhat;
+		m_nNotifyID = nID;
+		
+		Init();	//初始化
+	}
+	
+	//成员初始化
+	private void Init()
+	{
+		//m_strUser = UserInfoHelper.getUser(m_Context);		//登录名
+		m_strIMSI = PhoneDataProvider.getIMSI(m_Context);	//IMSI
+		m_strIMEI = PhoneDataProvider.getIMEI(m_Context);	//IMEI
+		m_strModel = PhoneDataProvider.getModel();			//型号
+		
+		m_listTaskInfo = new ArrayList<TaskInfo>();
+		m_htTaskPar = new Hashtable<String, String>();
+		m_listTasks = new ArrayList<AbsTask>();
+		m_listRunTasks = new ArrayList<AbsTask>();
+		m_htTaskSummary = new Hashtable<String, String>();
+		m_listTaskDetails = new ArrayList<Hashtable<String, String>>();
+		
+		m_jsonArrWebRec = new JSONArray();
+		m_jsonArrVideo = new JSONArray();
+		m_jsonArrSpeed = new JSONArray();
+	}
+	
+	//开始测试处理
+	public void onStart()
+	{
+		m_lStartTime = System.currentTimeMillis();	//开始时间
+		m_strJobID = m_strIMEI + "_" + m_lStartTime;//任务ID
+		setTaskJobID(m_strJobID);	//设置业务的JobID
+		
+		//保存JobInfo初始信息
+		//m_testDataLoal.addJobInfo(this);
+	}
+	
+	//停止当前运行业务,不保存测试数据
+	public void stopWithOutSave(int nIndex)
+	{
+		getTask(nIndex).StopTaskWithoutSaving();
+	}
+	
+	//完成测试处理
+	public void onComplete()
+	{
+		m_lEndTime = System.currentTimeMillis();	//结束时间
+		//uploadToServer();	//上传数据到服务器
+	}
+	
+	/**
+	 * 功能:	添加测试业务
+	 * 参数:	strTaskInfo: 
+	 * 返回值:
+	 * 说明:
+	 */
+	public void addTaskInfo(String strTaskInfo)
+	{
+		try
+		{
+			JSONArray arr = new JSONArray(strTaskInfo);
+			for (int i = 0; i < arr.length(); i++) //解析并保存需要测试的任务
+			{
+				m_listTaskInfo.add(new TaskInfo(arr.getJSONObject(i)));
+			}
+		}
+		catch (JSONException e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	//获取业务测试数量
+	public int getTaskInfoCount()
+	{
+		return m_listTaskInfo.size();
+	}
+	
+	//获取指定业务的
+	public TaskInfo getTaskInfo(int nIndex)
+	{
+		return m_listTaskInfo.get(nIndex);
+	}
+	
+	//获取指定业务的
+	public List<TaskInfo> getTaskInfo()
+	{
+		return m_listTaskInfo;
+	}
+		
+	//获取指定业务的名称
+	public String getTaskName(int nIndex)
+	{
+		TaskInfo taskInfo = getTaskInfo(nIndex);
+		if(taskInfo != null)
+			return taskInfo.m_strTaskName;
+		else
+			return null;
+	}
+	
+	//获取指定业务的名称--大众版测试使用
+	public String getTaskNameEx(int nIndex)
+	{
+		String strName = getTaskName(nIndex);
+		if(strName == null)
+			return "";
+		
+		strName = strName.replace("大众版-", "");
+		if(strName.contains("网页测试"))
+		{
+			strName = strName.replace("网页测试", "");
+			strName = "网页(" + strName + ")";
+		}
+		else if(strName.contains("FTP"))
+		{
+			if(strName.contains("下载"))
+				strName = "FTP(下载)";
+			else if(strName.contains("上传"))
+				strName = "FTP(上传)";
+		}
+		
+		return strName;
+	}
+	
+	//设置所有业务的JobID
+	private void setTaskJobID(String strJobID)
+	{
+		for (int i = 0; i < m_listTasks.size(); i++)
+		{
+			m_listTasks.get(i).m_strJobID = strJobID;
+		}
+	}
+	//---------------------------------------------
+	//获取所有需要测试的业务数量
+	public int getTaskSum()
+	{
+		return m_listTasks.size();// + m_listWebObj.size();
+	}
+	
+	//获取指定的测试业务
+	public AbsTask getTask(int nIndex)
+	{
+		return m_listTasks.get(nIndex);
+	}
+	
+	//添加正在运行的业务
+	public void addRunTask()
+	{
+		for (AbsTask task : m_listTasks)
+		{
+			m_listRunTasks.add(task);
+		}
+	}
+	//----------------------------------------------------------------------------------
+	//获取需要测试业务的配置参数
+	public void getTaskPar()
+	{
+		for (TaskInfo taskInfo : m_listTaskInfo)
+		{
+			//获取业务的配置参数
+			String strParJson = TaskUtil.getTaskPara(m_Context, taskInfo.m_strTaskID); 
+			m_htTaskPar.put(taskInfo.m_strTaskID, strParJson);
+		}
+	}
+	
+	//根据业务配置添加测试业务
+	public void addTaskByConfig()
+	{
+		for (TaskInfo taskInfo : m_listTaskInfo)
+		{
+			addTaskOnDefaultCfg(taskInfo);	//添加任务
+		}
+
+	}
+	
+	// 默认服务器配置开始
+	private void addTaskOnDefaultCfg(TaskInfo taskInfo)
+	{
+		String strPar = m_htTaskPar.get(taskInfo.m_strTaskID);//获取业务配置
+
+		// 回到主线程创建任务
+		BuildTaskThread buildTask = new BuildTaskThread(m_Context, taskInfo, strPar, false,m_bAnteTest,m_bBtsInfo);
+		buildTask.run();
+
+		AbsTask task = buildTask.m_task;
+		if (task != null)
+			m_listTasks.add(task);
+		
+		//网页测试
+		if(buildTask.m_webObj != null)
+			m_listWebObj.add(buildTask.m_webObj);
+	}
+	
+	//-----------------------当前运行业务-------------------------------------
+	/**
+	 * 功能: 开始指定业务
+	 * 参数:	nTaskIndex: 任务索引
+	 * 返回值: 完成任务
+	 * 说明:
+	 */
+	public AbsTask TaskTest(int nTaskIndex)
+	{
+		AbsTask curTask = getTask(nTaskIndex);
+		curTask.m_lStartTime = System.currentTimeMillis();	//业务开始时间
+
+		curTask.StartTask(); //开始业务测试
+
+		// 等待当前任务结束
+		do
+		{
+			CGlobal.Sleep(1000);
+		}
+		while (curTask.m_curState == TestState.eTesting);
+		return curTask;
+	}
+	
+	//删除已运行的业务
+	public void removeRunTask(AbsTask curTask)
+	{
+		if (m_listRunTasks.contains(curTask))
+			m_listRunTasks.remove(curTask);
+	}
+	
+	//当前任务是否完成
+	public boolean IsJobComplete()
+	{
+		return m_listRunTasks.isEmpty();
+	}
+	//-------------------------结果报告-------------------------------------------
+	//获取任务报告
+	public void buildJobReport()
+	{
+		// 构建总的任务数据
+		StringBuilder sb = new StringBuilder();
+		sb.append("总体报告");
+		
+		if(m_bAnteTest)
+			sb.append(",网络环境");
+		//总体报告信息
+		m_htTaskSummary.put("总体报告", AbsTask.getJobReport(m_Context.getApplicationContext(), m_listTasks));
+
+		// 构建每个任务的数据
+		for (int i = 0; i < getTaskSum(); i++)
+		{
+			sb.append("," + getTaskName(i));
+			m_htTaskSummary.put(m_listTaskInfo.get(i).m_strTaskName, m_listTasks.get(i).getSimpReport());//添加业务报告
+
+			// 添加天馈网络环境
+			if (!m_htTaskSummary.contains("网络环境") && m_listTasks.get(i).isAnteInfoValid())
+				m_htTaskSummary.put("网络环境", m_listTasks.get(i).getAnteInfo());
+		}
+		
+		//无线环境总报告
+		sb.append(",无线环境");
+		m_htTaskSummary.put("无线环境", AbsTask.getNetWorkReport(m_listTasks));;
+
+		m_htTaskSummary.put("Order", sb.toString());
+	}
+	
+	//添加详细报告
+	public void addTaskDetail(int nIndex,AbsTask curTask)
+	{
+		m_listTaskDetails.add(nIndex, curTask.getDetailReport());
+	}
+	//=============================后台测试(自动测试)=================================================
+	//设置自动测试任务列表
+	public void setAutoList(List<TaskInfo> listTaskInfo)
+	{
+		m_listTaskInfo = listTaskInfo;
+	}
+	
+	//开始自动测试
+	public void startAutoTest()
+	{
+		/*if(checkWeiboTest())	//没有微博测试
+			startAutoTestEx();		
+		else	//已经认证	
+		{
+			// 如果微博到达调用上限，不进行微博测试
+			Oauth2AccessToken token = WeiboAuthHelper.readAccessToken(m_Context);
+			AccountAPI api = new AccountAPI(token);
+			api.rateLimitStatus(new AutoTestRequestListener(m_Context, this));
+		}*/
+	}
+	
+	private boolean checkWeiboTest()
+	{
+		// 如果微博没有验证，不进行微博测试
+		/*Oauth2AccessToken token = WeiboAuthHelper.readAccessToken(m_Context);
+		if (!token.isSessionValid())	//没有微博认证
+		{
+			for (int i = 0; i < m_listTaskInfo.size(); i++)
+			{
+				if (m_listTaskInfo.get(i).m_strTaskType.equals(TaskType.IM.name()))
+					m_listTaskInfo.remove(i);
+			}
+
+			// 腾讯微博验证
+			String strAccToken = Util.getSharePersistent(m_Context, "ACCESS_TOKEN");
+			if (strAccToken.length() == 0)
+			{
+				for (int i = 0; i < m_listTaskInfo.size(); i++)
+				{
+					if (m_listTaskInfo.get(i).m_strTaskType.equals(TaskType.TencentWeibo.name()))
+						m_listTaskInfo.remove(i);
+				}
+			}
+			return true;
+		}		
+		else	//已经认证	
+			return false;*/
+		return true;
+	}
+	
+	//获取业务配置并创建自动测试业务
+	private void createAutoTask()
+	{
+		for (TaskInfo taskInfo : m_listTaskInfo)
+		{
+			showNotify(taskInfo.m_strTaskName + "开始...");
+			// 设置任务
+			String paraJson = TaskUtil.getTaskPara(m_Context, taskInfo.m_strTaskID);
+
+			// 回到主线程创建任务
+			BuildTaskThread buildTask = new BuildTaskThread(m_Context, taskInfo, paraJson, true,m_bAnteTest,m_bBtsInfo);
+			m_hHandler.post(buildTask);
+
+			//等待完成
+			while (!buildTask.m_bFinish)
+			{
+				CGlobal.Sleep(1000);
+			}
+
+			AbsTask task = buildTask.m_task;
+			task.setNotify(m_hHandler, m_nWhat,null);
+			m_listTasks.add(task);
+		}
+	}
+	
+	/**
+	 * 功能: 后台开始测试
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public void startAutoTestEx()
+	{
+		PhoneDataProvider.ScreenWakeLock(m_Context, false);
+		
+		createAutoTask();	//创建自动测试业务
+		
+		onStart();	//开始准备
+		// 开启任务
+		AbsTask task;
+		for (int i = 0; i < m_listTasks.size(); i++)
+		{
+			if(IsStopTest()) //是否停止测试
+				break;
+		
+			task = m_listTasks.get(i);
+			if (task == null)
+				continue;
+
+			task.m_lStartTime = System.currentTimeMillis();
+
+			task.StartTask(); //业务开始测试
+
+			// 等待当前任务结束
+			do
+			{	
+				if(stopCurTest(i))	//是否停止测试
+					break;
+			
+				CGlobal.Sleep(1000);
+			}
+			while (!task.IsFinished());
+		}
+
+		//TaskUtil.saveLastTaskTime(m_Context, new Date().getTime());
+		showNotify("自动测试完成");
+
+		/*switch (m_nNotifyID)
+		{
+		case NotificationHelper.Note_AutoTestSimp:
+			// 发送测试停止到服务
+			Intent service = new Intent(m_Context, AutoTestTaskServiceSimp.class);
+			service.addCategory(Category_Action.StopTest.name());
+			m_Context.startService(service);
+			break;
+		default:
+			break;
+		}
+		*/
+		onComplete();	//结束处理-->上传数据
+
+		PhoneDataProvider.releaseWakeLock();	//释放锁屏
+	}
+	
+	//停止当前测试
+	public void stopTest()
+	{
+		m_bStop = true;
+	}
+	
+	//是否停止当前测试
+	private boolean IsStopTest()
+	{
+		return m_bStop;
+	}
+	
+	//判断是否停止当前测试
+	private boolean stopCurTest(int nCurTask)
+	{
+		if(!IsStopTest())
+			return false;
+		
+		stopWithOutSave(nCurTask);	//停止当前测试
+		return true;
+	}
+	
+	/**
+	 * 功能: 发送notification
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public void showNotify(String msg)
+	{
+		//if(m_nNotifyID > 0 && m_Context != null)
+		//	NotificationHelper.notifyAutoTest(m_nNotifyID, m_Context, msg);
+	}
+	//--------------------------------------------------------------------------
+	//上传数据到服务器
+	private boolean uploadToServer()
+	{
+		m_nUpLoadNetWork = PhoneDataProvider.getAvaiableNetworkType(m_Context.getApplicationContext()); //当前网络类型
+		String strJson = getJsonRet();
+		Log.i(TAG, strJson);
+		String strRet = WebUtil.uploadTestData(strJson,1); //
+		if(strRet.equals("ok"))
+			return true;
+		else
+			return false;
+	}
+	
+	//获取结果数据Json
+	private String getJsonRet()
+	{
+		//没有业务测试
+		if(getTaskSum() <= 0)
+			return "";
+		
+		JSONObject objRet = new JSONObject();
+		JSONArray objJob = new JSONArray();
+		JSONArray objTask = new JSONArray();
+		JSONArray objNetWork = new JSONArray();
+		JSONArray objAnte = new JSONArray();
+		JSONArray objPing = new JSONArray();
+		JSONArray objWebRec = new JSONArray();	//详细记录
+		JSONArray objWeb = new JSONArray();
+		JSONArray objFtp = new JSONArray();
+		JSONArray objWeibo = new JSONArray();
+		JSONArray objDial = new JSONArray();
+		JSONArray objVideo = new JSONArray();
+		JSONArray objVideoRec = new JSONArray(); //视频详细记录
+		
+		//Job
+		objJob.put(m_strJobID);
+		objJob.put(m_strJobType);
+		objJob.put(m_strSubType);
+		objJob.put(m_lStartTime + "");
+		objJob.put(m_lEndTime + "");
+		objJob.put(m_strUser);
+		objJob.put(m_strIMSI);
+		objJob.put(m_strIMEI);
+		objJob.put(m_strModel);
+		objJob.put(m_strHotID);
+		objJob.put(m_strFloor + "");
+		objJob.put(m_nUpLoadNetWork + "");
+		
+		AbsTask task;
+		for (int i = 0; i < m_listTasks.size(); i++)
+		{
+			task = m_listTasks.get(i);
+			objTask.put(task.getTaskInfoJson());	//业务表
+			objNetWork.put(task.getNetWorkJson());	//无线网络
+			objAnte.put(task.getAnteJson());		//天馈信息
+			switch (task.m_taskType)
+			{
+			case PING:
+				objPing.put(task.getTaskDataJson());
+				break;
+			case WEBSITE:
+				objWeb.put(task.getTaskDataJson());
+				objWebRec = task.getTaskRecJson(objWebRec);	//详细记录
+				break;
+			case FTP:
+				objFtp.put(task.getTaskDataJson());
+				break;
+			case DIAL:
+				objDial.put(task.getTaskDataJson());
+				break;
+			case VIDEO:
+				objVideo.put(task.getTaskDataJson());
+				objVideoRec = task.getTaskRecJson(objVideoRec);	//详细记录
+				break;
+			case IM:
+			case TencentWeibo:
+				objWeibo.put(task.getTaskDataJson());
+				break;
+			default:
+				break;
+			}
+		}
+		
+		//添加到结果集里
+		try
+		{
+			objRet.put("job", objJob);
+			objRet.put("task", objTask);
+			objRet.put("network", objNetWork);
+			objRet.put("ante", objAnte);
+			objRet.put("ping", objPing);
+			objRet.put("web", objWeb);
+			objRet.put("webrec", objWebRec);
+			objRet.put("ftp", objFtp);
+			objRet.put("weibo", objWeibo);
+			objRet.put("dial", objDial);
+			objRet.put("video", objVideo);
+			objRet.put("videorec", objVideoRec);
+		}
+		catch (JSONException e)
+		{
+			e.printStackTrace();
+		}
+		return objRet.toString();
+	}
+}

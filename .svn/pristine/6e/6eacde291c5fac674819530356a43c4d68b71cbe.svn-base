@@ -1,0 +1,30 @@
+package com.wellcell.ctdetection;
+
+import com.baidu.mapapi.SDKInitializer;
+
+import android.app.Application;
+
+public class DetectionApp extends Application
+{
+
+	@Override
+	public void onCreate()
+	{
+		super.onCreate();
+		try
+		{
+			SDKInitializer.initialize(this);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void onTerminate()
+	{
+		super.onTerminate();
+	}
+
+}

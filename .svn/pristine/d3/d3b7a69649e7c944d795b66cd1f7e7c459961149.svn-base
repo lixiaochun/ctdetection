@@ -1,0 +1,183 @@
+package com.wellcell.SubFrag.Diagnosis;
+
+
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.Fragment;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import com.wellcell.ctdetection.R;
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Task.TaskPar.TraceroutePar;
+import com.wellcell.inet.Task.Traceroute.TraceRouteObject;
+
+//traceroute测试
+public class TracerouteFragment extends Fragment implements OnClickListener
+{
+	private TextView m_tvResult;	//结果
+	private EditText m_etHopCount;	//跳转次数
+	private EditText m_etTimeout;	//超时时间
+	private AutoCompleteTextView m_autoAddr;	//自动完成(地址)
+	private ScrollView m_scrollRet;
+	private Button m_btnTest;		//开始测试
+	private ProgressBar m_pbLoading;	
+	
+	private TraceroutePar m_trPar;	//配置参数
+	private TraceRouteObject m_trObj;	//trace route测试对象
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+	{
+		View view = inflater.inflate(R.layout.fragment_traceroute, null);
+		// initial
+		m_autoAddr = (AutoCompleteTextView) view.findViewById(R.id.address);
+		m_etHopCount = (EditText) view.findViewById(R.id.hop);
+		m_etTimeout = (EditText) view.findViewById(R.id.timeout);
+
+		m_btnTest = (Button) view.findViewById(R.id.btn_test);
+		m_btnTest.setOnClickListener(this);
+		
+		m_tvResult = (TextView) view.findViewById(R.id.result);
+		m_autoAddr.setAdapter(new ArrayAdapter<String>(getActivity(), 
+				android.R.layout.simple_dropdown_item_1line, CGlobal.WebAddrs));
+		
+		m_scrollRet = (ScrollView) view.findViewById(R.id.scroll_result);
+		m_pbLoading = (ProgressBar) view.findViewById(R.id.pb_loading);
+		
+		m_trPar = new TraceroutePar();
+		m_trObj = new TraceRouteObject(m_hHandler, 4);
+		
+		return view;
+	}
+	
+	@Override
+	public void onHiddenChanged(boolean hidden)
+	{
+		super.onHiddenChanged(hidden);
+		//CommandTask.stop();
+	}
+
+	private Handler m_hHandler = new Handler()
+	{
+		@Override
+		public void handleMessage(Message msg)
+		{
+			switch (msg.what)
+			{
+			case 0:	//完成测试
+				setCtrlsEnable(true);
+				break;
+			case 4:
+				if(msg.obj != null)
+				{
+					if(m_pbLoading.getVisibility() == View.VISIBLE)
+						m_pbLoading.setVisibility(View.GONE);
+					
+					m_tvResult.setText((String)msg.obj);
+					m_scrollRet.fullScroll(android.view.View.FOCUS_DOWN);
+				}
+				break;
+			default:
+				break;
+			}
+			super.handleMessage(msg);
+		}
+	};
+	
+	//ping测试线程
+	private Runnable tracrouteTest = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_trObj.execTraceroute(m_trPar);
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, 0));	//结束
+		}
+	};
+	
+	//获取配置参数
+	private void getPar()
+	{
+		try
+		{
+			//网址
+			String strTemp = m_autoAddr.getText().toString();
+			if(strTemp.equalsIgnoreCase(""))
+				strTemp = CGlobal.WebAddrs[0];
+			
+			m_trPar.setDest(strTemp);
+			
+			//跳转数
+			strTemp = m_etHopCount.getText().toString();
+			if(strTemp.equalsIgnoreCase(""))
+				strTemp = "30";
+			
+			m_trPar.m_nHops = Integer.parseInt(strTemp);
+			
+			//包大小
+			strTemp = m_etTimeout.getText().toString();
+			if(strTemp.equalsIgnoreCase(""))
+				strTemp = "2000";
+			
+			m_trPar.m_dTimeout = (Integer.parseInt(strTemp)/1000.0);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * 功能: 设置控件是否可用
+	 * 参数: bVisible: true:可用,false: 不可用
+	 * 返回值:
+	 * 说明:
+	 */
+	private void setCtrlsEnable(boolean bVisible)
+	{
+		if(!bVisible)	//开始
+		{
+			m_btnTest.setBackgroundDrawable(getResources().getDrawable(R.drawable.sel_btn_testing));
+			m_tvResult.setText("");
+			m_pbLoading.setVisibility(View.VISIBLE);
+		}
+		else
+			m_btnTest.setBackgroundDrawable(getResources().getDrawable(R.drawable.sel_btn_start));
+
+		
+		m_autoAddr.setEnabled(bVisible);
+		m_etHopCount.setEnabled(bVisible);
+		m_etTimeout.setEnabled(bVisible);
+	}
+	
+	@Override
+	public void onClick(View v)
+	{
+		switch (v.getId())
+		{
+		case R.id.btn_test:	//开始测试
+			if(!m_trObj.isRunning())
+			{
+				setCtrlsEnable(false);
+				getPar();
+				new Thread(tracrouteTest).start();
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+
+}

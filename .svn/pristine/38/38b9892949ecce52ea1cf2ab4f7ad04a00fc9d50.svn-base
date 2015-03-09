@@ -1,0 +1,727 @@
+package com.wellcell.SubFrag.TaskTest;
+
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.Fragment;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.baidu.location.BDLocation;
+import com.baidu.location.BDLocationListener;
+import com.baidu.location.LocationClient;
+import com.wellcell.ctdetection.DetectionApp;
+import com.wellcell.ctdetection.R;
+import com.wellcell.inet.Common.CGlobal;
+import com.wellcell.inet.Common.CGlobal.ModuleIndex;
+import com.wellcell.inet.Common.CGlobal.TestState;
+import com.wellcell.inet.DataProvider.PhoneDataProvider;
+import com.wellcell.inet.Task.AbsTask;
+import com.wellcell.inet.Task.JobTest;
+import com.wellcell.inet.Task.TempAidInfo;
+import com.wellcell.inet.Task.Ftp.FtpTestTask;
+import com.wellcell.inet.Task.Web.WebTestTaskEx;
+import com.wellcell.inet.TaskList.TaskInfo;
+import com.wellcell.inet.TaskList.TaskUtil;
+import com.wellcell.inet.Web.WebUtil;
+import com.wellcell.inet.entity.AddrInfo;
+import com.wellcell.inet.view.SpeedPanel;
+
+//大众版测试--感知业务
+public class CustTaskFragment extends Fragment implements OnClickListener
+{
+	private final String TAG = "CustTaskFragment";
+
+	private Context m_contextApp;
+	private DetectionApp m_inetApp = null;
+	//private CustTestActivity m_ParentActivity; //父窗口
+
+	private ListView m_lvTask = null; //业务列表
+	private CustTaskAdapter m_taskAdapter;
+
+	//汇总信息
+	private TextView m_tvNetWork;
+	private TextView m_tvFtpSpeed;
+	private TextView m_tvSpeedLable;
+	private TextView m_tvSpeedMax;
+	private TextView m_tvWebDelay;
+
+	private SpeedPanel m_speePanel; //速率仪表盘
+
+	//定时更新网络状态
+	private TimerTask m_taskNetwork;
+	private Timer m_timerNetwork = new Timer();
+
+	// 百度定位
+	private LocationClient m_baiduLocClient = null;
+	private AddrInfo m_curAddrInfo = new AddrInfo(); //当前地址
+
+	private TextView m_tvLoc; // 经纬度
+	private TextView m_tvLocInfo; // 详细地点
+
+	private Button m_btnStart; //开始
+
+	//------------------------------------------------
+	private JobTest m_jobTest = null; //当前测试任务
+	private List<TaskInfo> m_listTaskInfo; //任务列表
+	private int m_nFloor = -99; //楼层
+
+	private TestState m_curStatus = TestState.eReady;
+	private boolean m_bRunning = false;
+	private int m_nCurRunning = -1;
+
+	//瞬时速率计算
+	private long m_lPreSize = 0; //前一刻流量
+	private long m_lCurSize = 0; //当前流量
+	private long m_lPreTime = 0; //前一刻
+	private long m_lCurTime = 0;
+
+	//统计值
+	private double m_dWebSpeedSum = 0; //网页速率总和
+	private double m_dWebDelaySum = 0; //网页时延总和
+	private int m_nWebTaskCount = 0; //网页次数
+	private int m_nWebDelayCount = 0; //网页时延次数
+
+	private String m_strSrvAddr = "125.88.76.117"; //服务器地址
+
+	//下行
+	private double m_dSpeedSumD = 0; //ftp速率总和
+	private int m_nSpeedCountD = 0;
+	private double m_dDownSpeedAvg = -1;
+	private double m_dDownSpeedMax = Integer.MIN_VALUE; //最大平均速率(byte/s)
+
+	//上行
+	private double m_dFtpSpeedSumU = 0; //ftp速率总和
+	private int m_nFtpTaskCountU = 0;
+	private double m_dUpSpeedAvg = -1;
+	private double m_dUpSpeedMax = Integer.MIN_VALUE; //最大上行速率
+
+	private int m_nDur = 20; //完成信息停留时间 30*500ms
+
+	//---------------------------------------------
+	private TempAidInfo m_aidInfo; //辅助信息
+
+	public static CustTaskFragment newInstance()
+	{
+		CustTaskFragment taskFrag = new CustTaskFragment();
+		return taskFrag;
+	}
+
+	@Override
+	public void onCreate(Bundle savedInstanceState)
+	{
+		super.onCreate(savedInstanceState);
+
+		m_contextApp = getActivity().getApplicationContext();
+		m_inetApp = (DetectionApp) m_contextApp;
+		//m_ParentActivity = (CustTestActivity) getActivity();
+
+		m_aidInfo = new TempAidInfo(getActivity().getApplicationContext());
+
+		// --------------------------------------------------------------------------------
+		m_baiduLocClient = new LocationClient(getActivity().getApplicationContext());
+		m_baiduLocClient = CGlobal.setLocationOption(m_baiduLocClient); // 设置定位参数
+		m_baiduLocClient.registerLocationListener(new BDLocationListener() //注册监听
+				{
+					@Override
+					public void onReceiveLocation(BDLocation arg0)
+					{
+						showLocation(arg0); // 获取并显示地址信息
+					}
+				});
+		m_baiduLocClient.start(); //开始定位
+		// ================================================================================
+
+		m_taskNetwork = new TimerTask()
+		{
+			@Override
+			public void run()
+			{
+				if (getActivity() == null)
+					return;
+
+				m_hHandler.sendMessage(m_hHandler.obtainMessage(eNetWork)); //更新网络类型
+
+				//统计实时速率
+				if (m_bRunning) //正在运行
+				{
+					m_lCurSize = CGlobal.getCurTrafficRx(m_contextApp);
+					m_lCurTime = System.currentTimeMillis();
+					if (m_lPreSize == 0) //初始化
+					{
+						m_lPreSize = m_lCurSize;
+						m_lPreTime = m_lCurTime;
+					}
+					else
+					{
+						if (m_lCurSize - m_lPreSize > 0 && m_lCurTime > m_lPreTime)
+						{
+							double dCurSpeed = (m_lCurSize - m_lPreSize) * 1000.0 / (m_lCurTime - m_lPreTime);
+							if (dCurSpeed > 0)
+							{
+								m_dSpeedSumD += dCurSpeed;
+								m_nSpeedCountD++;
+							}
+
+							if (m_dDownSpeedMax < dCurSpeed)
+								m_dDownSpeedMax = dCurSpeed;
+
+							dCurSpeed = CGlobal.getSpeedMbps(dCurSpeed);//dCurSpeed * 8.0 / (1024.0 * 1024.0); //-->Mbps
+
+							m_lPreSize = m_lCurSize;
+							m_lPreTime = m_lCurTime;
+
+							m_hHandler.sendMessage(Message.obtain(m_hHandler, eCurSpedd, dCurSpeed));
+						}
+					}
+				}
+				else
+				{//测试完毕
+					//测试完毕信息停留时间
+					if (m_curStatus == TestState.eComplete && m_nDur-- < 0)
+					{
+						m_nDur = 30;
+						m_hHandler.sendMessage(Message.obtain(m_hHandler, eMsg, ""));
+					}
+				}
+			}
+		};
+		m_timerNetwork.schedule(m_taskNetwork, 500, 500);
+
+		new Thread(getTaskList).start(); //获取任务列表
+	}
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+	{
+		View view = inflater.inflate(R.layout.cust_task, null);
+
+		//初始化adapter
+		m_lvTask = (ListView) (view.findViewById(R.id.tasklist));
+		m_taskAdapter = new CustTaskAdapter(getActivity());
+		m_lvTask.setAdapter(m_taskAdapter);
+		bindComponment(view); //绑定控件
+		return view;
+	}
+
+	@Override
+	public void onHiddenChanged(boolean hidden)
+	{
+		super.onHiddenChanged(hidden);
+		if (hidden)
+			m_speePanel.setVisibility(View.GONE);
+		else
+			m_speePanel.setVisibility(View.VISIBLE);
+	}
+
+	@Override
+	public void onStart()
+	{
+		super.onStart();
+	}
+
+	@Override
+	public void onPause()
+	{
+		super.onPause();
+	}
+
+	@Override
+	public void onStop()
+	{
+		super.onStop();
+	}
+
+	@Override
+	public void onDestroyView()
+	{
+		super.onDestroyView();
+	}
+
+	@Override
+	public void onDestroy()
+	{
+		super.onDestroy();
+	}
+
+	@Override
+	public void onDetach()
+	{
+		super.onDetach();
+	}
+
+	private void Init()
+	{
+		m_dDownSpeedMax = 0;
+
+		m_dWebSpeedSum = 0; //网页速率总和
+		m_dWebDelaySum = 0; //网页时延总和
+		m_nWebTaskCount = 0; //网页次数
+		m_nWebDelayCount = 0;
+
+		m_dSpeedSumD = 0; //ftp速率总和
+		m_nSpeedCountD = 0;
+		m_dDownSpeedAvg = -1;
+		m_dDownSpeedMax = Integer.MIN_VALUE;
+
+		m_dFtpSpeedSumU = 0; //ftp速率总和
+		m_nFtpTaskCountU = 0;
+		m_dUpSpeedAvg = -1;
+		m_dUpSpeedMax = Integer.MIN_VALUE; //最大上行速率
+
+		//汇总
+		m_tvFtpSpeed.setText("Mbps");
+		m_tvSpeedMax.setText("Mbps");
+		m_tvWebDelay.setText("ms");
+
+		m_taskAdapter.Init(); //初始化adapter
+	}
+
+	private final int eNetWork = 0; //更新网络信息
+	private final int eGetPar = 1; //获取配置信息
+	private final int eTaskList = 2; //测试列表
+	private final int eTaskRet = 3; //更新业务信息
+	private final int eStatus = 4; //更新状态
+	private final int eMsg = 5; //更新测试状态信息
+	private final int eCurSpedd = 6; //当前速率
+
+	private final Handler m_hHandler = new Handler()
+	{
+		public void handleMessage(Message msg)
+		{
+			switch (msg.what)
+			{
+			case eNetWork: //更新当前网络信息
+				if (m_tvNetWork != null)
+					m_tvNetWork.setText(PhoneDataProvider.getActNetworkName(getActivity()));
+				break;
+			case eTaskList: //获取任务列表处理-->列表显示
+				TaskInfo taskInfo;
+				for (int i = 0; i < m_listTaskInfo.size(); i++)
+				{
+					taskInfo = m_listTaskInfo.get(i);
+					if (taskInfo.m_strTaskType.equals("WEBSITE") || taskInfo.m_strTaskType.equals("FTP")) //只测试网页和FTP
+						m_taskAdapter.add(new CustTask(taskInfo));
+				}
+				m_taskAdapter.notifyDataSetChanged(); //改变数据通知
+				break;
+			case eGetPar: //获取业务配参数后处理
+				addTasks.run(); //主线程中执行
+
+				m_tvSpeedLable.setText("当前速率");
+				m_btnStart.setBackgroundDrawable(getResources().getDrawable(R.drawable.sel_btn_testing));
+				//m_btnStart.setText("正在测试...");
+				break;
+			case eStatus: //状态更新
+				if (msg.obj != null)
+					m_curStatus = (TestState) msg.obj;
+
+				if (m_curStatus == TestState.eTesting)
+					m_taskAdapter.setSelectStatus(false); //列表不可选
+				else if (m_curStatus == TestState.eComplete)
+				{
+					m_aidInfo.getCpuUsageInfo(1); //结束CPU时间信息
+					showCurSpeed(CGlobal.getSpeedMbps(m_dDownSpeedMax)); //定格平均速率
+					m_taskAdapter.setSelectStatus(true); //列表可选
+
+					new Thread(upLoadThread).start(); //上传数据
+
+					m_tvSpeedLable.setText("平均速率");
+					m_btnStart.setBackgroundDrawable(getResources().getDrawable(R.drawable.sel_btn_start));
+					//m_btnStart.setText("");
+					//m_ParentActivity.updateState(FrameType.eTask, m_curStatus, null); //更新按钮状态
+				}
+				break;
+			case eMsg: //回传状态信息
+				//m_ParentActivity.updateState(FrameType.eTask, m_curStatus, msg.obj.toString());
+				break;
+			case eTaskRet: //单次业务测试完毕
+				AbsTask curTask = (AbsTask) msg.obj;
+				updateTaskInfo(curTask);
+				break;
+			case eCurSpedd: //瞬时速率计算
+				Double dCurSpeed = (Double) msg.obj;
+				m_tvFtpSpeed.setText(dCurSpeed + "Mbps"); //实时速率
+				showCurSpeed(dCurSpeed);
+				m_tvSpeedMax.setText(CGlobal.getSpeedString(m_dDownSpeedMax)); //峰值
+				break;
+			default:
+				break;
+			}
+		}
+	};
+
+	@Override
+	public void onClick(View v)
+	{
+		switch (v.getId())
+		{
+		case R.id.btn_start:
+			startstopTest("");
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	/**
+	 * 功能: 开始/停止测试
+	 * 参数:
+	 * 返回值:
+	 * 说明:
+	 */
+	public void startstopTest(String strHotID)
+	{
+		if (!m_bRunning) //没测试
+		{
+			String strTaskInfo = getTaskInfoJson(); //获取当前需要测试项
+			if (strTaskInfo.length() <= 0)
+			{
+				Toast.makeText(getActivity(), "请选择测试业务,如若没有可选项请与管理员联系...", Toast.LENGTH_SHORT).show();
+				return;
+			}
+
+			m_jobTest = new JobTest(getActivity(), ModuleIndex.eCust, "", strHotID, m_nFloor);
+			m_jobTest.addTaskInfo(strTaskInfo); //添加任务列表
+			Init(); //初始化
+			new Thread(getTaskPars).start(); //准备开始,1:获取配置参数
+		}
+		else
+		{
+			/*if (m_jobTest != null)
+			{
+				m_jobTest.stopTest();
+				m_bRunning = false;
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eStatus, TestState.eStoped));
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eMsg, "正在停止测试..."));
+			}*/
+		}
+	}
+
+	//获取选择的测试业务
+	private String getTaskInfoJson()
+	{
+		JSONArray jsonArr = new JSONArray();
+		TaskInfo taskInfo;
+		Map<Integer, CustTask> mapCustTask = m_taskAdapter.getDatas();
+		for (CustTask custTask : mapCustTask.values())
+		{
+			if (custTask.IsChecked())
+			{
+				for (int i = 0; i < m_listTaskInfo.size(); i++)
+				{
+					taskInfo = m_listTaskInfo.get(i);
+					if (custTask.getTaskID().equals(taskInfo.m_strTaskID))
+						jsonArr.put(taskInfo.toJsonObj());
+				}
+			}
+		}
+
+		if (jsonArr.length() > 0)
+			return jsonArr.toString();
+		return "";
+	}
+
+	//1获取任务列表
+	private Runnable getTaskList = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_listTaskInfo = TaskUtil.getTaskList(getActivity(), ModuleIndex.eCust);
+			Collections.sort(m_listTaskInfo, new Comparator<TaskInfo>() //列表排序,ftp放最后
+					{
+						@Override
+						public int compare(TaskInfo lhs, TaskInfo rhs)
+						{
+							if (lhs.m_strTaskType.equals("FTP"))
+								return 1;
+							else
+								return -1;
+						}
+					});
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, eTaskList, null));
+		}
+	};
+
+	//3.获取配置参数
+	private Runnable getTaskPars = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_jobTest.getTaskPar(); //获取业务配置参数
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, eGetPar));
+		}
+	};
+
+	//4.添加测试业务到任务
+	private Runnable addTasks = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_jobTest.addTaskByConfig(); //添加业务测试实体
+
+			m_aidInfo.updateStartInfo(); //更新信息
+			new Thread(startTasks).start();
+			//m_hHandler.sendMessage(Message.obtain(m_hHandler, 2));
+		}
+	};
+
+	// 开始测试
+	private Runnable startTasks = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			m_bRunning = true;
+			PhoneDataProvider.ScreenWakeLock(getActivity(), false);
+
+			m_jobTest.addRunTask(); //添加正在执行业务
+
+			AbsTask curTask;
+			int nTaskSum = m_jobTest.getTaskSum();
+			m_jobTest.onStart();
+			for (int i = 0; i < nTaskSum && m_bRunning; i++) //逐个执行业务
+			{
+				//更新UI
+				m_nCurRunning = i;
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eStatus, TestState.eTesting));
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eMsg, "正在" + m_jobTest.getTaskNameEx(m_nCurRunning) + "测试..."));
+
+				curTask = m_jobTest.TaskTest(i); //测试
+
+				//--------------------单次业务测试完毕------------------------------------------------------
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eMsg, m_jobTest.getTaskNameEx(m_nCurRunning) + "测试完成"));
+				m_hHandler.sendMessage(Message.obtain(m_hHandler, eTaskRet, curTask));
+			}
+			//--------------------------所有业务执行完毕-----------------------------------------------------
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, eMsg, "测试完毕"));
+			//m_jobTest.buildJobReport();// 构建总的任务数据
+
+			PhoneDataProvider.releaseWakeLock();
+			m_bRunning = false;
+
+			m_jobTest.onComplete(); //完成处理
+			m_hHandler.sendMessage(Message.obtain(m_hHandler, eStatus, TestState.eComplete));
+		}
+	};
+
+	//上传测试数据
+	private Runnable upLoadThread = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			JSONObject jsonRet = new JSONObject();
+			JSONArray jsonSpeed = new JSONArray(); //单条
+			JSONArray jsonRec = new JSONArray(); //单条
+			try
+			{
+				jsonRec = m_aidInfo.getJsonVal(jsonRec);
+				jsonRec.put(m_strSrvAddr);
+				jsonRec.put(CGlobal.TimestampToDate(m_jobTest.m_lStartTime)); //开始时间
+
+				//下行
+				m_dDownSpeedMax = CGlobal.getInvalidVal(m_dDownSpeedMax);
+				jsonRec.put(CGlobal.floatFormat(m_dDownSpeedMax, 2) + "");
+
+				jsonRec.put(CGlobal.floatFormat(m_dDownSpeedAvg, 2) + "");
+
+				//上行
+				m_dUpSpeedMax = CGlobal.getInvalidVal(m_dUpSpeedMax);
+				jsonRec.put(CGlobal.floatFormat(m_dUpSpeedMax, 2) + "");
+
+				jsonRec.put(CGlobal.floatFormat(m_dUpSpeedAvg, 2) + "");
+
+				jsonSpeed.put(jsonRec);
+				jsonRet.put("speedtest", jsonSpeed);
+			}
+			catch (JSONException e)
+			{
+				return;
+			}
+
+			String strRet = WebUtil.uploadTestData(jsonRet.toString(), 1);
+			if (strRet.equals("ok"))
+				Log.i(TAG, "上传成功...");
+			else
+				Log.i(TAG, "上传失败...");
+		}
+	};
+
+	//更新测试业务
+	private void updateTaskInfo(AbsTask curTask)
+	{
+		String strTaskID = curTask.m_strTaskID; //业务ID
+
+		Integer nIndex = 0;
+		CustTask custTask = null;
+		Map<Integer, CustTask> mapCustTask = m_taskAdapter.getDatas();
+		for (Integer key : mapCustTask.keySet())
+		{
+			nIndex = key;
+			custTask = mapCustTask.get(key);
+			if (custTask.getTaskID().equals(strTaskID))
+				break;
+
+			custTask = null;
+		}
+
+		if (custTask == null)
+			return;
+
+		//更新数据
+		switch (curTask.m_taskType)
+		{
+		case PING:
+			break;
+		case WEBSITE:
+			m_nWebTaskCount++;
+			WebTestTaskEx webTask = (WebTestTaskEx) curTask;
+			if (webTask.m_nLinkDelayAvg > 0)
+			{
+				m_nWebDelayCount++;
+				m_dWebDelaySum += webTask.m_nLinkDelayAvg; //累加时延
+				custTask.setDelay(webTask.m_nLinkDelayAvg + "ms"); //连接时延
+				//custTask.setDelay(webTask.m_nOpenDelayAvg + "ms");	//打开时延
+			}
+			m_dWebSpeedSum += webTask.m_dSpeedAvg; //累加速率
+			custTask.setAvgSpeed(CGlobal.getSpeedString(webTask.m_dSpeedAvg));
+			custTask.setSize(CGlobal.getSizeString(webTask.m_lSizeSum));
+			break;
+		case FTP:
+			FtpTestTask ftpTask = (FtpTestTask) curTask;
+			if (ftpTask.m_dSpeedAvg > 0)
+			{
+				m_dSpeedSumD += ftpTask.m_dSpeedAvg;
+				m_nSpeedCountD++;
+			}
+
+			custTask.setAvgSpeed(CGlobal.getSpeedString(ftpTask.m_dSpeedAvg));
+			custTask.setSize(CGlobal.getSizeString(ftpTask.m_lSizeSum));
+			break;
+		case IM:
+		case TencentWeibo:
+			break;
+		case DIAL:
+			break;
+		case VIDEO:
+			break;
+		default:
+			break;
+		}
+
+		double dSpeed = 0;
+		//平均计算
+		if (m_nSpeedCountD > 0)
+		{
+			m_dDownSpeedAvg = m_dSpeedSumD / m_nSpeedCountD;
+			if (m_dDownSpeedMax < m_dDownSpeedAvg)
+				m_dDownSpeedMax = m_dDownSpeedAvg;
+
+			m_tvFtpSpeed.setText(CGlobal.getSpeedString(m_dDownSpeedAvg));
+		}
+
+		//m_tvSpeedMax.setText(CGlobal.getSpeedString(m_dDownSpeedMax)); //峰值
+
+		if (m_nWebTaskCount > 0)
+		{
+			dSpeed = m_dWebSpeedSum / m_nWebTaskCount;
+			if (m_dDownSpeedMax < dSpeed)
+				m_dDownSpeedMax = dSpeed;
+
+			//m_tvSpeedMax.setText(CGlobal.getSpeedString(dSpeed));
+		}
+
+		if (m_nWebDelayCount > 0)
+			m_tvWebDelay.setText((int) (m_dWebDelaySum / m_nWebDelayCount) + "ms");
+
+		custTask.setAvgSpeed(CGlobal.getSpeedString(m_dDownSpeedAvg)); //更新平局速率
+		m_taskAdapter.update(nIndex, custTask);
+		m_taskAdapter.notifyDataSetChanged();
+
+	}
+
+	/**
+	 * 功能:瞬时速率显示
+	 * 参数: dCurSpeed: 实时速率(Mbps)
+	 * 返回值:
+	 * 说明:
+	 */
+	private void showCurSpeed(double dCurSpeed)
+	{
+		if (dCurSpeed < 0)
+			return;
+
+		int nIncreDegs = 0;
+		if (dCurSpeed <= 1)
+			nIncreDegs = (int) (dCurSpeed * 30);
+		else if (dCurSpeed > 1 && dCurSpeed <= 10)
+			nIncreDegs = 30 + ((int) (dCurSpeed - 1) * 30 / (10 - 1));
+		else if (dCurSpeed > 10 && dCurSpeed <= 20)
+			nIncreDegs = 60 + ((int) (dCurSpeed - 10) * 30 / (20 - 10));
+		else if (dCurSpeed > 20 && dCurSpeed <= 50)
+			nIncreDegs = 90 + ((int) (dCurSpeed - 20) * 30 / (50 - 20));
+		else if (dCurSpeed > 50 && dCurSpeed <= 100)
+			nIncreDegs = 120 + ((int) (dCurSpeed - 50) * 30 / (100 - 50));
+		else if (dCurSpeed > 100 && dCurSpeed <= 150)
+			nIncreDegs = 150 + ((int) (dCurSpeed - 100) * 30 / (150 - 100));
+		else
+			nIncreDegs = 180;
+
+		if (m_speePanel != null && m_speePanel.isShown())
+			m_speePanel.onDrawed(nIncreDegs);
+	}
+
+	// 格式化显当前地址信息
+	private void showLocation(BDLocation dbLoc)
+	{
+		m_curAddrInfo.getAddrInfo(dbLoc); //提取信息
+
+		if (m_curAddrInfo.IsValidLonLat())
+			m_tvLoc.setText(m_curAddrInfo.getLonLatString()); // 经纬度
+
+		m_tvLocInfo.setText(m_curAddrInfo.toString()); // 详细地址
+	}
+
+	//绑定控件
+	private void bindComponment(View view)
+	{
+		m_tvNetWork = ((TextView) view.findViewById(R.id.networktype));
+		m_tvFtpSpeed = ((TextView) view.findViewById(R.id.ftpspeed));
+		m_tvSpeedLable = (TextView) view.findViewById(R.id.tv_speedlable);
+		m_tvSpeedMax = ((TextView) view.findViewById(R.id.webspeed));
+		m_tvWebDelay = ((TextView) view.findViewById(R.id.webdelay));
+
+		m_speePanel = ((SpeedPanel) view.findViewById(R.id.speedpanel));
+
+		m_tvLoc = (TextView) view.findViewById(R.id.tv_loc); // 经纬度信息
+		m_tvLoc.setText("正在努力获取...");
+		m_tvLocInfo = (TextView) view.findViewById(R.id.tv_locinfo); // 详细地址信息
+
+		m_btnStart = (Button) view.findViewById(R.id.btn_start);
+		m_btnStart.setOnClickListener(this);
+	}
+}

@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical" >
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="2dp" >
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:drawable/picture_frame"
+            android:padding="8dp" >
+
+            <TextView
+                android:id="@+id/cpu_title"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:drawableLeft="@drawable/ic_cpu"
+                android:drawablePadding="4dp"
+                android:gravity="left|center"
+                android:text="CPU使用率"
+                android:textColor="@color/black" />
+
+            <FrameLayout
+                android:id="@+id/cpu_runtime"
+                android:layout_width="match_parent"
+                android:layout_height="112dp"
+                android:layout_below="@id/cpu_title" >
+            </FrameLayout>
+
+            <ProgressBar
+                android:id="@+id/cpu_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/cpu_runtime"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/idle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_below="@id/cpu_progress"
+                android:layout_marginRight="8dp"
+                android:drawableLeft="@android:drawable/arrow_up_float"
+                android:drawablePadding="4dp"
+                android:text="空闲"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/busy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/cpu_progress"
+                android:layout_marginRight="8dp"
+                android:layout_toLeftOf="@id/idle"
+                android:drawableLeft="@android:drawable/arrow_down_float"
+                android:drawablePadding="4dp"
+                android:text="占用"
+                android:textColor="@color/black" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:background="@android:drawable/picture_frame"
+            android:padding="8dp" >
+
+            <TextView
+                android:id="@+id/ram_title"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:drawableLeft="@drawable/ic_ram"
+                android:drawablePadding="4dp"
+                android:gravity="left|center"
+                android:text="内存"
+                android:textColor="@color/black" />
+
+            <ProgressBar
+                android:id="@+id/ram_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/ram_title"
+                android:layout_centerHorizontal="true" />
+
+            <TextView
+                android:id="@+id/ram_free"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_below="@id/ram_progress"
+                android:layout_marginRight="8dp"
+                android:drawableLeft="@android:drawable/arrow_up_float"
+                android:drawablePadding="4dp"
+                android:text="内存_free"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/ram_used"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/ram_progress"
+                android:layout_marginRight="8dp"
+                android:layout_toLeftOf="@id/ram_free"
+                android:drawableLeft="@android:drawable/arrow_down_float"
+                android:drawablePadding="4dp"
+                android:text="占用"
+                android:textColor="@color/black" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:background="@android:drawable/picture_frame"
+            android:padding="8dp" >
+
+            <TextView
+                android:id="@+id/storage_title"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:drawableLeft="@drawable/ic_sdcard"
+                android:drawablePadding="4dp"
+                android:gravity="left|center"
+                android:text="SD卡"
+                android:textColor="@color/black" />
+
+            <ProgressBar
+                android:id="@+id/storage_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/storage_title"
+                android:layout_centerHorizontal="true" />
+
+            <TextView
+                android:id="@+id/storage_free"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_below="@id/storage_progress"
+                android:layout_marginRight="8dp"
+                android:drawableLeft="@android:drawable/arrow_down_float"
+                android:drawablePadding="4dp"
+                android:text="空闲"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/storage_used"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/storage_progress"
+                android:layout_marginRight="8dp"
+                android:layout_toLeftOf="@id/storage_free"
+                android:drawableLeft="@android:drawable/arrow_up_float"
+                android:drawablePadding="4dp"
+                android:text="占用"
+                android:textColor="@color/black" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:background="@android:drawable/picture_frame"
+            android:padding="8dp" >
+
+            <TextView
+                android:id="@+id/general_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:drawableLeft="@drawable/ic_detail"
+                android:drawablePadding="4dp"
+                android:gravity="left|center"
+                android:text="基本信息"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/model_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/general_title"
+                android:layout_margin="4dp"
+                android:text="型号"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/model_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@id/model_title"
+                android:layout_alignParentRight="true"
+                android:layout_margin="4dp"
+                android:text="zte_n980"
+                android:textColor="@color/black" />
+
+            <ImageView
+                android:id="@+id/model_seperate"
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_below="@id/model_title"
+                android:background="#808080"
+                android:contentDescription="seperate" />
+
+            <TextView
+                android:id="@+id/version_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/model_seperate"
+                android:layout_margin="4dp"
+                android:text="系统版本"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/version_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@id/version_title"
+                android:layout_alignParentRight="true"
+                android:layout_margin="4dp"
+                android:text="内核版本"
+                android:textColor="@color/black" />
+
+            <ImageView
+                android:id="@+id/version_seperate"
+                android:layout_width="match_parent"
+                android:layout_height="0.4dp"
+                android:layout_below="@id/version_title"
+                android:background="#808080"
+                android:contentDescription="seperate" />
+
+            <TextView
+                android:id="@+id/imei_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/version_seperate"
+                android:layout_margin="4dp"
+                android:text="IMEI"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/imei_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@id/imei_title"
+                android:layout_alignParentRight="true"
+                android:layout_margin="4dp"
+                android:text="IMEI"
+                android:textColor="@color/black" />
+
+            <ImageView
+                android:id="@+id/imei_seperate"
+                android:layout_width="match_parent"
+                android:layout_height="0.4dp"
+                android:layout_below="@id/imei_title"
+                android:background="#808080"
+                android:contentDescription="seperate" />
+
+            <TextView
+                android:id="@+id/imsi_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/imei_seperate"
+                android:layout_margin="4dp"
+                android:text="IMSI"
+                android:textColor="@color/black" />
+
+            <TextView
+                android:id="@+id/imsi_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@id/imsi_title"
+                android:layout_alignParentRight="true"
+                android:layout_margin="4dp"
+                android:text="IMSI"
+                android:textColor="@color/black" />
+        </RelativeLayout>
+    </LinearLayout>
+
+</ScrollView>

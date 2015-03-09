@@ -1,0 +1,69 @@
+package com.wellcell.MainFrag;
+
+import android.os.Bundle;
+import android.support.v4.app.Fragment;
+
+import com.wellcell.MainFrag.FragmentTabHost;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TabHost.TabSpec;
+
+import com.wellcell.ctdetection.R;
+
+//第一层主界面抽象
+public abstract class AbsMainFragment extends Fragment
+{
+	private FragmentTabHost mTabHost;
+
+	protected boolean m_bSingleFrag = false; // 是否是单独界面
+	protected Class m_classfrags[]; // 各子fragment
+	protected int m_nImgViews[]; // 按钮图标ID
+	protected String m_strTabLables[]; // Tab文字
+
+	abstract View buildView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState);
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+	{
+		View view = buildView(inflater, container, savedInstanceState);
+
+		// --------------------------------------------------------------------------------------------------
+		if (!m_bSingleFrag) // 分栏
+		{
+			mTabHost = (FragmentTabHost) view.findViewById(android.R.id.tabhost);
+			mTabHost.setup(getActivity(), getChildFragmentManager(), R.id.realtabcontent);
+
+			TabSpec tabSpec;
+			for (int i = 0; i < m_classfrags.length; i++)
+			{
+				tabSpec = mTabHost.newTabSpec(m_strTabLables[i]).setIndicator(getTabItemView(inflater, i)); // 设置Tab图标/文字
+				mTabHost.addTab(tabSpec, m_classfrags[i], null); // 添加tab
+				mTabHost.getTabWidget().getChildAt(i).setBackgroundResource(R.drawable.selector_tab_background); // 设置Tab按钮的背景
+			}
+		}
+		return view;
+	}
+
+	/**
+	 * 功能:给Tab按钮设置图标和文字 参数: 返回值: 说明:
+	 */
+	private View getTabItemView(LayoutInflater inflater, int index)
+	{
+		View view = inflater.inflate(R.layout.tab_item_view, null);
+
+		ImageView imageView = (ImageView) view.findViewById(R.id.imageview);
+		imageView.setImageResource(m_nImgViews[index]);
+		return view;
+	}
+
+	@Override
+	public void onHiddenChanged(boolean hidden)
+	{
+		super.onHiddenChanged(hidden);
+		if (mTabHost != null)
+			mTabHost.hide(hidden);
+	}
+}
