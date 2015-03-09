@@ -106,5 +106,4 @@
         <activity android:name="com.wellcell.inet.CQT.TaskRetActivity" >
         </activity>
     </application>
-
 </manifest>
